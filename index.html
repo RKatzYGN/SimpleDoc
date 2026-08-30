@@ -38,7 +38,7 @@
       box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     body.test-mode-active #test-banner { display: block; }
-    body.test-mode-active #drawer-btn { display: none; } /* Hide docs drawer in test mode */
+    body.test-mode-active #drawer-btn { display: none; }
     body.test-mode-active #test-toggle-btn { display: none; }
 
     /* Document Drawer */
@@ -85,8 +85,7 @@
       font-weight: bold;
     }
 
-    /* Print Formatting Rules */
-  /* Print-Only Banner Styling */
+    /* Hidden element for active-test printing */
     #test-print-header { display: none; }
 
     /* Print Formatting Rules */
@@ -114,7 +113,8 @@
   <div id="test-banner">
     ⚠️ TEST MODE ACTIVE — TIME ELAPSED: <span id="test-timer">00:00:00</span>
   </div>
-  <!-- Print-Only Test Header (Hidden on screen, visible when printing during active test mode) -->
+
+  <!-- Printable Header (Visible only when printing during Test Mode) -->
   <div id="test-print-header">
     🧪 TEST MODE IN PROGRESS — TIME ELAPSED SO FAR: <span id="test-timer-print">00:00:00</span>
   </div>
@@ -171,7 +171,7 @@
     let documents = [];
     let folders = [];
     let currentDocId = null;
-    let selectedFolderId = null; // null = all documents
+    let selectedFolderId = null; 
     let isTestMode = false;
     let saveTimeout = null;
 
@@ -185,6 +185,7 @@
     const docListEl = document.getElementById('doc-list');
     const folderListEl = document.getElementById('folder-list');
     const timerEl = document.getElementById('test-timer');
+    const timerPrintEl = document.getElementById('test-timer-print');
 
     function toggleDrawer() {
       document.getElementById('drawer').classList.toggle('open');
@@ -251,7 +252,6 @@
 
       documents = data || [];
 
-      // Find the first non-locked document to open initially
       const openDoc = documents.find(d => !d.is_locked);
 
       if (documents.length === 0 || !openDoc) {
@@ -263,12 +263,11 @@
     }
 
     function selectDocument(id) {
-      if (isTestMode) return; // Prevent switching in test mode
+      if (isTestMode) return;
 
       const doc = documents.find(d => d.id === id);
       if (!doc) return;
 
-      // Block access to locked test documents
       if (doc.is_locked) {
         alert('This test has been submitted and is locked. It cannot be viewed or edited.');
         return;
@@ -308,7 +307,6 @@
 
         li.appendChild(span);
 
-        // Hide delete button for locked tests
         if (!doc.is_locked) {
           const del = document.createElement('button');
           del.className = 'del-btn';
@@ -408,44 +406,49 @@
       return `${mins} minute(s) and ${secs} second(s)`;
     }
 
+    function updateTimerDisplays(secs) {
+      const formatted = formatTime(secs);
+      if (timerEl) timerEl.innerText = formatted;
+      if (timerPrintEl) timerPrintEl.innerText = formatted;
+    }
+
     async function startTestMode() {
       if (!confirm("Start Test Mode? This will clear the screen for a new test document and start a timer.")) return;
 
       isTestMode = true;
       document.body.classList.add('test-mode-active');
       document.getElementById('test-submit-btn').style.display = 'inline-block';
-      
       document.getElementById('drawer').classList.remove('open');
 
-      // Reset and Start Timer
-     // Reset and Start Timer
-      secondsElapsed = 0;
-      timerEl.innerText = "00:00:00";
-      document.getElementById('test-timer-print').innerText = "00:00:00"; // Added line
-      
-      clearInterval(timerInterval);
-      timerInterval = setInterval(() => {
-        secondsElapsed++;
-        const formatted = formatTime(secondsElapsed);
-        timerEl.innerText = formatted;
-        document.getElementById('test-timer-print').innerText = formatted; // Added line
-      }, 1000);
+      const initialTitle = `Test - ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`;
+      titleInput.value = initialTitle;
 
-      // Create a fresh test document
-      titleInput.value = `Test - ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`;
-      editor.innerHTML = '';
-      statusEl.innerText = 'TEST IN PROGRESS';
-
-      const { data } = await dbClient
+      // 1. Initialize Document in Database
+      const { data, error } = await dbClient
         .from('documents')
-        .insert([{ title: titleInput.value, content: '', is_test: true, is_locked: false }])
+        .insert([{ title: initialTitle, content: '', is_test: true, is_locked: false }])
         .select()
         .single();
 
-      if (data) {
-        currentDocId = data.id;
-        documents.unshift(data);
+      if (error || !data) {
+        alert("Failed to create test document. Check database connection.");
+        return;
       }
+
+      currentDocId = data.id;
+      documents.unshift(data);
+      editor.innerHTML = '';
+      statusEl.innerText = 'TEST IN PROGRESS';
+
+      // 2. Reset and Run Live Timer
+      secondsElapsed = 0;
+      updateTimerDisplays(0);
+
+      clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        secondsElapsed++;
+        updateTimerDisplays(secondsElapsed);
+      }, 1000);
     }
 
     async function submitTest() {
@@ -453,12 +456,10 @@
 
       statusEl.innerText = 'Submitting Test...';
 
-      // Stop Timer
       clearInterval(timerInterval);
       const finalDurationFormatted = formatTimeReadable(secondsElapsed);
       const completionTime = new Date().toLocaleString();
 
-      // Prepend metadata duration header directly inside the document HTML
       const durationBannerHTML = `
         <div class="test-meta-header" contenteditable="false">
           🧪 <strong>TEST COMPLETED</strong><br>
@@ -471,7 +472,6 @@
       const title = titleInput.value;
       const content = durationBannerHTML + editor.innerHTML;
 
-      // Lock document and update in Supabase
       const { error } = await dbClient
         .from('documents')
         .update({ title, content, is_locked: true, updated_at: new Date() })
@@ -483,14 +483,12 @@
         return;
       }
 
-      // Exit Test Mode & Reset UI
       isTestMode = false;
       document.body.classList.remove('test-mode-active');
       document.getElementById('test-submit-btn').style.display = 'none';
 
       alert(`Test submitted successfully!\n\nTotal Time: ${finalDurationFormatted}`);
       
-      // Refresh documents and open a clean file
       await fetchDocuments();
     }
 
