@@ -86,9 +86,25 @@
     }
 
     /* Print Formatting Rules */
+  /* Print-Only Banner Styling */
+    #test-print-header { display: none; }
+
+    /* Print Formatting Rules */
     @media print {
       header, #drawer, #test-banner, #status { display: none !important; }
       #editor { height: auto !important; padding: 0 !important; overflow: visible !important; }
+
+      /* Show test timer header on print IF test mode is active */
+      body.test-mode-active #test-print-header {
+        display: block !important;
+        background: #f0f0f0;
+        border: 2px solid #d93025;
+        padding: 0.75rem 1rem;
+        margin-bottom: 1.5rem;
+        font-weight: bold;
+        color: #d93025;
+        font-size: 1rem;
+      }
     }
   </style>
 </head>
@@ -97,6 +113,10 @@
   <!-- Test Mode Top Banner with Live Timer -->
   <div id="test-banner">
     ⚠️ TEST MODE ACTIVE — TIME ELAPSED: <span id="test-timer">00:00:00</span>
+  </div>
+  <!-- Print-Only Test Header (Hidden on screen, visible when printing during active test mode) -->
+  <div id="test-print-header">
+    🧪 TEST MODE IN PROGRESS — TIME ELAPSED SO FAR: <span id="test-timer-print">00:00:00</span>
   </div>
 
   <!-- Header Bar -->
