@@ -25,7 +25,7 @@
     #doc-title { font-size: 1.1rem; border: 1px dashed #ccc; padding: 0.2rem 0.5rem; background: #fff; font-weight: bold; outline: none; border-radius: 4px; }
     #status { font-size: 0.85rem; color: #666; }
 
-    /* Red Test Mode Banner */
+    /* Red Test Mode Banner with Timer */
     #test-banner {
       display: none;
       background-color: #d93025;
@@ -74,6 +74,17 @@
     body.test-mode-active #editor { height: calc(100vh - 110px); }
     #editor:empty:before { content: "Start typing in English or Hebrew..."; color: #999; pointer-events: none; }
 
+    /* Printable Duration Stamp Styling */
+    .test-meta-header {
+      background: #f0f0f0;
+      border-left: 4px solid #d93025;
+      padding: 0.75rem 1rem;
+      margin-bottom: 1.5rem;
+      font-size: 0.95rem;
+      color: #333;
+      font-weight: bold;
+    }
+
     /* Print Formatting Rules */
     @media print {
       header, #drawer, #test-banner, #status { display: none !important; }
@@ -83,9 +94,9 @@
 </head>
 <body>
 
-  <!-- Test Mode Top Banner -->
+  <!-- Test Mode Top Banner with Live Timer -->
   <div id="test-banner">
-    ⚠️ TEST MODE ACTIVE — ALL DOCUMENTS LOCKED UNTIL SAVED
+    ⚠️ TEST MODE ACTIVE — TIME ELAPSED: <span id="test-timer">00:00:00</span>
   </div>
 
   <!-- Header Bar -->
@@ -144,11 +155,16 @@
     let isTestMode = false;
     let saveTimeout = null;
 
+    // Timer Variables
+    let timerInterval = null;
+    let secondsElapsed = 0;
+
     const editor = document.getElementById('editor');
     const titleInput = document.getElementById('doc-title');
     const statusEl = document.getElementById('status');
     const docListEl = document.getElementById('doc-list');
     const folderListEl = document.getElementById('folder-list');
+    const timerEl = document.getElementById('test-timer');
 
     function toggleDrawer() {
       document.getElementById('drawer').classList.toggle('open');
@@ -258,7 +274,6 @@
         
         const span = document.createElement('span');
         
-        // Icon handling based on document status
         let icon = '';
         if (doc.is_locked) icon = '🔒 ';
         else if (doc.is_test) icon = '🧪 ';
@@ -313,7 +328,6 @@
       await dbClient.from('documents').delete().eq('id', id);
       documents = documents.filter(d => d.id !== id);
 
-      // Select next available unlocked document
       const availableDoc = documents.find(d => !d.is_locked);
       if (availableDoc) {
         selectDocument(availableDoc.id);
@@ -360,16 +374,37 @@
       statusEl.innerText = error ? 'Save Error' : 'Saved';
     }
 
-    // --- TEST MODE ---
+    // --- TEST MODE & TIMER LOGIC ---
+    function formatTime(totalSeconds) {
+      const hrs = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
+      const mins = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
+      const secs = String(totalSeconds % 60).padStart(2, '0');
+      return `${hrs}:${mins}:${secs}`;
+    }
+
+    function formatTimeReadable(totalSeconds) {
+      const mins = Math.floor(totalSeconds / 60);
+      const secs = totalSeconds % 60;
+      return `${mins} minute(s) and ${secs} second(s)`;
+    }
+
     async function startTestMode() {
-      if (!confirm("Start Test Mode? This will clear the screen for a new test document and disable document access until submitted.")) return;
+      if (!confirm("Start Test Mode? This will clear the screen for a new test document and start a timer.")) return;
 
       isTestMode = true;
       document.body.classList.add('test-mode-active');
       document.getElementById('test-submit-btn').style.display = 'inline-block';
       
-      // Close drawer if open
       document.getElementById('drawer').classList.remove('open');
+
+      // Reset and Start Timer
+      secondsElapsed = 0;
+      timerEl.innerText = "00:00:00";
+      clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        secondsElapsed++;
+        timerEl.innerText = formatTime(secondsElapsed);
+      }, 1000);
 
       // Create a fresh test document
       titleInput.value = `Test - ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`;
@@ -389,14 +424,29 @@
     }
 
     async function submitTest() {
-      if (!confirm("Submit and save your test? The test will be permanently locked and exit Test Mode.")) return;
+      if (!confirm("Submit and save your test? The test duration will be saved and the document will be locked.")) return;
 
       statusEl.innerText = 'Submitting Test...';
 
-      const title = titleInput.value;
-      const content = editor.innerHTML;
+      // Stop Timer
+      clearInterval(timerInterval);
+      const finalDurationFormatted = formatTimeReadable(secondsElapsed);
+      const completionTime = new Date().toLocaleString();
 
-      // Lock document in Supabase
+      // Prepend metadata duration header directly inside the document HTML
+      const durationBannerHTML = `
+        <div class="test-meta-header" contenteditable="false">
+          🧪 <strong>TEST COMPLETED</strong><br>
+          ⏱️ <strong>Duration:</strong> ${finalDurationFormatted}<br>
+          📅 <strong>Submitted:</strong> ${completionTime}
+        </div>
+        <hr style="margin-bottom: 1.5rem; border: none; border-top: 1px solid #ccc;">
+      `;
+
+      const title = titleInput.value;
+      const content = durationBannerHTML + editor.innerHTML;
+
+      // Lock document and update in Supabase
       const { error } = await dbClient
         .from('documents')
         .update({ title, content, is_locked: true, updated_at: new Date() })
@@ -408,12 +458,12 @@
         return;
       }
 
-      // Exit Test Mode & Lock Local Copy
+      // Exit Test Mode & Reset UI
       isTestMode = false;
       document.body.classList.remove('test-mode-active');
       document.getElementById('test-submit-btn').style.display = 'none';
 
-      alert("Test submitted successfully! It is now locked.");
+      alert(`Test submitted successfully!\n\nTotal Time: ${finalDurationFormatted}`);
       
       // Refresh documents and open a clean file
       await fetchDocuments();
