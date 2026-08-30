@@ -418,12 +418,17 @@
       document.getElementById('drawer').classList.remove('open');
 
       // Reset and Start Timer
+     // Reset and Start Timer
       secondsElapsed = 0;
       timerEl.innerText = "00:00:00";
+      document.getElementById('test-timer-print').innerText = "00:00:00"; // Added line
+      
       clearInterval(timerInterval);
       timerInterval = setInterval(() => {
         secondsElapsed++;
-        timerEl.innerText = formatTime(secondsElapsed);
+        const formatted = formatTime(secondsElapsed);
+        timerEl.innerText = formatted;
+        document.getElementById('test-timer-print').innerText = formatted; // Added line
       }, 1000);
 
       // Create a fresh test document
