@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Teacher Assignment Portal</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; background: #f4f6f8; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 1rem; }
+    .card { background: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 100%; max-width: 500px; padding: 2rem; }
+    h2 { margin-bottom: 1rem; color: #111; }
+    p { font-size: 0.9rem; color: #666; margin-bottom: 1.5rem; line-height: 1.4; }
+    label { font-size: 0.85rem; font-weight: bold; color: #333; display: block; margin-bottom: 0.4rem; }
+    input[type="text"], select, textarea { width: 100%; padding: 0.75rem; border: 1px solid #ccc; border-radius: 4px; font-size: 0.95rem; margin-bottom: 1.25rem; outline: none; }
+    input[type="text"]:focus, textarea:focus { border-color: #0070f3; }
+    .divider { text-align: center; font-size: 0.8rem; color: #888; margin: 1rem 0; position: relative; }
+    .divider::before, .divider::after { content: ""; position: absolute; top: 50%; width: 40%; height: 1px; background: #eee; }
+    .divider::before { left: 0; } .divider::after { right: 0; }
+    button { width: 100%; padding: 0.85rem; background: #0070f3; color: white; border: none; border-radius: 4px; font-size: 1rem; font-weight: bold; cursor: pointer; }
+    button:hover { background: #0059b3; }
+    #status-msg { margin-top: 1rem; text-align: center; font-weight: bold; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h2>📤 Upload Student Assignment</h2>
+    <p>Send a Google Doc or custom text directly to the student's Chromebook word processor.</p>
+
+    <!-- Folder Assignment Selection -->
+    <label for="folder-select">Assign to Folder</label>
+    <select id="folder-select">
+      <option value="">📁 General (No Folder)</option>
+    </select>
+
+    <!-- Document Title -->
+    <label for="doc-title">Assignment Title</label>
+    <input type="text" id="doc-title" placeholder="e.g., History Worksheet - Unit 3" required>
+
+    <!-- Method A: Paste Google Doc Web Link -->
+    <label for="doc-url">Option A: Google Doc Published Link</label>
+    <input type="text" id="doc-url" placeholder="https://docs.google.com/document/d/.../pub">
+
+    <div class="divider">OR</div>
+
+    <!-- Method B: Paste Content Directly -->
+    <label for="doc-content">Option B: Paste Text / Fill-in-the-Blank Prompts</label>
+    <textarea id="doc-content" rows="6" placeholder="Paste assignment text here. Use _____ for fill-in-the-blank boxes."></textarea>
+
+    <button onclick="submitAssignment()">Upload to Student App</button>
+    <div id="status-msg"></div>
+  </div>
+
+  <!-- Supabase Integration -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <script>
+    // --- SUPABASE CONFIGURATION ---
+    const API_URL = 'https://vrlksitffjyramoqxxeq.supabase.co';
+    const API_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZybGtzaXRmZmp5cmFtb3F4eGVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwOTg3ODYsImV4cCI6MjEwMzY3NDc4Nn0.ZCsFV5tQy2tf4r1Rk9CV7xKlyebfZCtg7SQDvJHF3gY';
+    
+    const dbClient = window.supabase.createClient(API_URL, API_KEY);
+
+    const folderSelect = document.getElementById('folder-select');
+    const statusMsg = document.getElementById('status-msg');
+
+    // Load available folders on boot
+    async function loadFolders() {
+      const { data } = await dbClient.from('folders').select('*').order('name', { ascending: true });
+      if (data) {
+        data.forEach(folder => {
+          const opt = document.createElement('option');
+          opt.value = folder.id;
+          opt.innerText = `📂 ${folder.name}`;
+          folderSelect.appendChild(opt);
+        });
+      }
+    }
+
+    async function submitAssignment() {
+      const title = document.getElementById('doc-title').value.trim();
+      const url = document.getElementById('doc-url').value.trim();
+      const rawText = document.getElementById('doc-content').value.trim();
+      const folderId = folderSelect.value || null;
+
+      if (!title) {
+        alert("Please enter an assignment title.");
+        return;
+      }
+
+      if (!url && !rawText) {
+        alert("Please provide a Google Doc link OR paste assignment text.");
+        return;
+      }
+
+      statusMsg.style.color = '#0070f3';
+      statusMsg.innerText = 'Uploading to database...';
+
+      let finalContent = '';
+
+      // Handle Google Doc Fetching
+      if (url) {
+        try {
+          let fetchUrl = url;
+          if (url.includes('/edit')) {
+            fetchUrl = url.replace(/\/edit.*$/, '/export?format=txt');
+          }
+          const response = await fetch(fetchUrl);
+          const fetchedText = await response.text();
+          finalContent = convertBlanksToInputs(fetchedText);
+        } catch (err) {
+          statusMsg.style.color = '#d93025';
+          statusMsg.innerText = 'Could not fetch Google Doc link. Check sharing settings or paste text directly.';
+          return;
+        }
+      } else {
+        finalContent = convertBlanksToInputs(rawText);
+      }
+
+      // Insert directly into Supabase
+      const { error } = await dbClient
+        .from('documents')
+        .insert([{
+          title: title,
+          content: finalContent,
+          folder_id: folderId
+        }]);
+
+      if (!error) {
+        statusMsg.style.color = '#2e7d32';
+        statusMsg.innerText = '✅ Success! Assignment sent to student.';
+        document.getElementById('doc-title').value = '';
+        document.getElementById('doc-url').value = '';
+        document.getElementById('doc-content').value = '';
+      } else {
+        statusMsg.style.color = '#d93025';
+        statusMsg.innerText = 'Database error. Failed to send.';
+      }
+    }
+
+    // Helper to turn underscores (___) into interactive fill-in boxes
+    function convertBlanksToInputs(text) {
+      return text.replace(/_{3,}/g, '<span style="border-bottom: 2px solid #0070f3; padding: 0 15px; display: inline-block; min-width: 60px;" contenteditable="true"></span>');
+    }
+
+    loadFolders();
+  </script>
+</body>
+</html>
