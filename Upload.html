@@ -138,9 +138,20 @@
       }
     }
 
-    // Helper to turn underscores (___) into interactive fill-in boxes
+    // Helper to format line breaks and convert blanks (___) into fill-in boxes
     function convertBlanksToInputs(text) {
-      return text.replace(/_{3,}/g, '<span style="border-bottom: 2px solid #0070f3; padding: 0 15px; display: inline-block; min-width: 60px;" contenteditable="true"></span>');
+      if (!text) return '';
+
+      // 1. Convert underscores (___) into interactive blank fill-in boxes
+      let formatted = text.replace(/_{3,}/g, '<span style="border-bottom: 2px solid #0070f3; padding: 0 15px; display: inline-block; min-width: 60px;" contenteditable="true"></span>');
+
+      // 2. Convert text line breaks (\n\n and \n) into HTML paragraphs/breaks
+      formatted = formatted
+        .split(/\r?\n\r?\n/)
+        .map(paragraph => `<p style="margin-bottom: 1rem;">${paragraph.replace(/\r?\n/g, '<br>')}</p>`)
+        .join('');
+
+      return formatted;
     }
 
     loadFolders();
