@@ -8,10 +8,12 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f6f8; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 1rem; }
     .card { background: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 100%; max-width: 500px; padding: 2rem; }
-    h2 { margin-bottom: 1rem; }
+    h2 { margin-bottom: 0.5rem; }
     p { font-size: 0.9rem; color: #666; margin-bottom: 1.5rem; }
     label { font-size: 0.85rem; font-weight: bold; display: block; margin-bottom: 0.4rem; }
     input[type="text"], select, textarea { width: 100%; padding: 0.75rem; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 1.25rem; }
+    .checkbox-group { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.25rem; background: #fff3f0; padding: 0.75rem; border-radius: 4px; border: 1px solid #ffcdd2; }
+    .checkbox-group label { margin: 0; cursor: pointer; color: #d93025; }
     .divider { text-align: center; font-size: 0.8rem; color: #888; margin: 1rem 0; position: relative; }
     .divider::before, .divider::after { content: ""; position: absolute; top: 50%; width: 40%; height: 1px; background: #eee; }
     .divider::before { left: 0; } .divider::after { right: 0; }
@@ -23,25 +25,33 @@
 
   <div class="card">
     <h2>📤 Upload Student Assignment</h2>
-    <p>Upload a PDF worksheet, paste a Google Doc link, or enter custom text.</p>
+    <p>Upload a PDF, Google Doc link, or custom text directly to the student app.</p>
 
     <label for="folder-select">Assign to Folder</label>
-    <select id="folder-select"><option value="">📁 General (No Folder)</option></select>
+    <select id="folder-select">
+      <option value="">📁 General (No Folder)</option>
+    </select>
+
+    <!-- Test Assignment Toggle -->
+    <div class="checkbox-group">
+      <input type="checkbox" id="is-test-checkbox" onchange="toggleTestFolder(this)">
+      <label for="is-test-checkbox">🧪 Mark as Test Assignment (Enforces Test Mode)</label>
+    </div>
 
     <label for="doc-title">Assignment Title</label>
-    <input type="text" id="doc-title" placeholder="e.g., Math Worksheet Page 4" required>
+    <input type="text" id="doc-title" placeholder="e.g., Unit 3 Math Test" required>
 
-    <!-- Method A: PDF Upload -->
-    <label for="pdf-file">Option A: Upload PDF Worksheet</label>
+    <!-- Option A: PDF -->
+    <label for="pdf-file">Option A: Upload PDF Worksheet / Test</label>
     <input type="file" id="pdf-file" accept=".pdf">
 
     <div class="divider">OR</div>
 
-    <!-- Method B: Text / Link -->
-    <label for="doc-content">Option B: Paste Text / Google Doc Link</label>
-    <textarea id="doc-content" rows="4" placeholder="Paste text here. Use _____ for blanks."></textarea>
+    <!-- Option B: Text / Doc Link -->
+    <label for="doc-content">Option B: Google Doc Link or Text</label>
+    <textarea id="doc-content" rows="4" placeholder="Paste link or text here. Use _____ for fill-in boxes."></textarea>
 
-    <button onclick="submitAssignment()">Upload to Student App</button>
+    <button onclick="submitAssignment()">Upload Assignment</button>
     <div id="status-msg"></div>
   </div>
 
@@ -53,16 +63,36 @@
 
     const folderSelect = document.getElementById('folder-select');
     const statusMsg = document.getElementById('status-msg');
+    let testFolderId = null;
 
     async function loadFolders() {
       const { data } = await dbClient.from('folders').select('*').order('name', { ascending: true });
       if (data) {
         data.forEach(folder => {
+          if (folder.name.toLowerCase() === 'tests') testFolderId = folder.id;
           const opt = document.createElement('option');
           opt.value = folder.id;
           opt.innerText = `📂 ${folder.name}`;
           folderSelect.appendChild(opt);
         });
+      }
+
+      // Automatically create a "Tests" folder if one doesn't exist yet
+      if (!testFolderId) {
+        const { data: newFolder } = await dbClient.from('folders').insert([{ name: 'Tests' }]).select().single();
+        if (newFolder) {
+          testFolderId = newFolder.id;
+          const opt = document.createElement('option');
+          opt.value = newFolder.id;
+          opt.innerText = `📂 Tests`;
+          folderSelect.appendChild(opt);
+        }
+      }
+    }
+
+    function toggleTestFolder(checkbox) {
+      if (checkbox.checked && testFolderId) {
+        folderSelect.value = testFolderId;
       }
     }
 
@@ -70,54 +100,68 @@
       const title = document.getElementById('doc-title').value.trim();
       const pdfFile = document.getElementById('pdf-file').files[0];
       const rawText = document.getElementById('doc-content').value.trim();
-      const folderId = folderSelect.value || null;
+      const isTest = document.getElementById('is-test-checkbox').checked;
+      let folderId = folderSelect.value || null;
 
-      if (!title) return alert("Please enter a title.");
-      if (!pdfFile && !rawText) return alert("Select a PDF file OR enter text.");
+      if (isTest && testFolderId) folderId = testFolderId;
+
+      if (!title) return alert("Please enter an assignment title.");
+      if (!pdfFile && !rawText) return alert("Select a PDF file OR enter text/link.");
 
       statusMsg.style.color = '#0070f3';
       statusMsg.innerText = 'Uploading...';
 
       let pdfUrl = null;
+      let finalContent = '';
 
-      // 1. Upload PDF to Supabase Storage if present
       if (pdfFile) {
         const fileName = `${Date.now()}_${pdfFile.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-        const { data, error } = await dbClient.storage
-          .from('pdf-assignments')
-          .upload(fileName, pdfFile);
+        const { error } = await dbClient.storage.from('pdf-assignments').upload(fileName, pdfFile);
 
         if (error) {
           statusMsg.style.color = '#d93025';
-          statusMsg.innerText = 'PDF Upload Failed. Check bucket settings.';
+          statusMsg.innerText = 'PDF Upload Failed.';
           return;
         }
 
-        const publicRes = dbClient.storage.from('pdf-assignments').getPublicUrl(fileName);
-        pdfUrl = publicRes.data.publicUrl;
+        pdfUrl = dbClient.storage.from('pdf-assignments').getPublicUrl(fileName).data.publicUrl;
+      } else if (rawText.includes('docs.google.com')) {
+        try {
+          let fetchUrl = rawText.includes('/edit') ? rawText.replace(/\/edit.*$/, '/export?format=txt') : rawText;
+          const res = await fetch(fetchUrl);
+          const fetchedText = await res.text();
+          finalContent = convertBlanksToInputs(fetchedText);
+        } catch (e) {
+          finalContent = convertBlanksToInputs(rawText);
+        }
+      } else {
+        finalContent = convertBlanksToInputs(rawText);
       }
 
-      // 2. Insert record into Database
       const { error } = await dbClient.from('documents').insert([{
         title: title,
-        content: rawText ? convertBlanksToInputs(rawText) : '',
+        content: finalContent,
         file_url: pdfUrl,
-        folder_id: folderId
+        folder_id: folderId,
+        is_test: isTest,
+        is_locked: false
       }]);
 
       if (!error) {
         statusMsg.style.color = '#2e7d32';
-        statusMsg.innerText = '✅ Success! Assignment sent.';
+        statusMsg.innerText = isTest ? '✅ Test assignment sent to Tests folder!' : '✅ Assignment sent successfully!';
         document.getElementById('doc-title').value = '';
         document.getElementById('pdf-file').value = '';
         document.getElementById('doc-content').value = '';
+        document.getElementById('is-test-checkbox').checked = false;
       } else {
         statusMsg.style.color = '#d93025';
-        statusMsg.innerText = 'Database error.';
+        statusMsg.innerText = 'Database upload error.';
       }
     }
 
     function convertBlanksToInputs(text) {
+      if (!text) return '';
       return text.replace(/_{3,}/g, '<span style="border-bottom: 2px solid #0070f3; padding: 0 15px; display: inline-block; min-width: 60px;" contenteditable="true"></span>')
                  .split(/\r?\n\r?\n/).map(p => `<p style="margin-bottom: 1rem;">${p.replace(/\r?\n/g, '<br>')}</p>`).join('');
     }
