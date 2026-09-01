@@ -21,6 +21,8 @@
     select { padding: 0.5rem; border-radius: 4px; border: 1px solid #cbd5e1; outline: none; }
     button { padding: 0.5rem 1rem; border-radius: 4px; border: none; font-weight: bold; cursor: pointer; background: #0070f3; color: white; }
     button:hover { background: #0059b3; }
+    button.danger { background: #d93025; }
+    button.danger:hover { background: #b71c1c; }
 
     .main-layout { display: flex; flex-grow: 1; overflow: hidden; }
 
@@ -72,6 +74,7 @@
       <select id="folder-filter" onchange="filterDocuments()">
         <option value="ALL">📁 All Folders</option>
       </select>
+      <button id="delete-btn" class="danger" style="display:none;" onclick="deleteCurrentDocument()">🗑️ Delete Selected</button>
       <button onclick="window.print()">🖨️ Print Selected Work</button>
     </div>
   </header>
@@ -118,6 +121,7 @@
     const textViewer = document.getElementById('text-viewer');
     const pdfViewer = document.getElementById('pdf-viewer');
     const emptyState = document.getElementById('empty-state');
+    const deleteBtn = document.getElementById('delete-btn');
 
     async function init() {
       await fetchFolders();
@@ -195,6 +199,7 @@
       if (!doc) return;
 
       emptyState.style.display = 'none';
+      deleteBtn.style.display = 'inline-block';
 
       if (doc.file_url) {
         textViewer.style.display = 'none';
@@ -236,7 +241,6 @@
 
           await page.render({ canvasContext: bgCanvas.getContext('2d'), viewport }).promise;
 
-          // Read-only Fabric.js Canvas for student markup display
           const fCanvas = new fabric.Canvas(overlayCanvas.id, {
             width: viewport.width,
             height: viewport.height,
@@ -253,6 +257,35 @@
         }
       } catch (err) {
         pdfViewer.innerHTML = '<p style="color:#d93025;">Error rendering student PDF file.</p>';
+      }
+    }
+
+    async function deleteCurrentDocument() {
+      if (!selectedDocId) return;
+
+      const doc = documents.find(d => d.id === selectedDocId);
+      const docTitle = doc ? doc.title : 'this document';
+
+      if (!confirm(`Are you sure you want to permanently delete "${docTitle}"?`)) {
+        return;
+      }
+
+      const { error } = await dbClient.from('documents').delete().eq('id', selectedDocId);
+
+      if (!error) {
+        documents = documents.filter(d => d.id !== selectedDocId);
+        selectedDocId = null;
+        
+        // Reset preview panel
+        textViewer.style.display = 'none';
+        pdfViewer.style.display = 'none';
+        emptyState.style.display = 'block';
+        deleteBtn.style.display = 'none';
+
+        renderDocList();
+        alert('Document deleted successfully.');
+      } else {
+        alert('Failed to delete document from database.');
       }
     }
 
