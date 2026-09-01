@@ -101,12 +101,20 @@
       background: #e5e5e5;
     }
 
-    .canvas-wrapper {
-      position: relative;
-      margin-bottom: 2rem;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.15);
-      background: #fff;
-    }
+   .canvas-wrapper {
+  position: relative;
+  margin-bottom: 2rem;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+  background: #fff;
+}
+
+/* Ensure the upper drawing canvas receives mouse/touch events */
+.canvas-container {
+  position: absolute !important;
+  top: 0;
+  left: 0;
+  z-index: 10;
+}
 
     /* Print Header */
     #test-print-header { display: none; }
