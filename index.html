@@ -162,12 +162,14 @@
     </div>
   </header>
 
-  <!-- PDF Annotation Toolbar -->
+ <!-- PDF Annotation Toolbar -->
   <div id="pdf-toolbar">
     <strong>PDF Tools:</strong>
     <button id="tool-draw" class="active" onclick="setPdfTool('draw')">✏️ Circle / Draw</button>
     <button id="tool-text" onclick="setPdfTool('text')">🔤 Add Text</button>
-    <button onclick="clearPdfCanvas()">🧹 Clear Markings</button>
+    <button id="tool-select" onclick="setPdfTool('select')">🖐️ Select / Erase</button>
+    <button id="delete-selected-btn" class="danger" style="display:none;" onclick="deleteSelectedObject()">🗑️ Delete Selected</button>
+    <button onclick="clearPdfCanvas()">⚠️ Clear All</button>
   </div>
 
   <!-- Navigation Drawer -->
@@ -444,35 +446,114 @@
         statusEl.innerText = 'PDF Load Error';
       }
     }
+let selectedObject = null;
 
     function setPdfTool(tool) {
       currentPdfTool = tool;
+
+      // Update button highlights
       document.getElementById('tool-draw').classList.toggle('active', tool === 'draw');
       document.getElementById('tool-text').classList.toggle('active', tool === 'text');
+      document.getElementById('tool-select').classList.toggle('active', tool === 'select');
+
+      const deleteBtn = document.getElementById('delete-selected-btn');
+      if (tool !== 'select') deleteBtn.style.display = 'none';
 
       fabricCanvases.forEach(fCanvas => {
+        // Remove old listeners
+        fCanvas.off('mouse:down');
+        fCanvas.off('selection:created');
+        fCanvas.off('selection:cleared');
+
         if (tool === 'draw') {
           fCanvas.isDrawingMode = true;
-        } else {
+          fCanvas.selection = false;
+          fCanvas.forEachObject(obj => obj.selectable = false);
+        } 
+        else if (tool === 'text') {
           fCanvas.isDrawingMode = false;
-          // Add Text on Click
-          fCanvas.once('mouse:down', (options) => {
+          fCanvas.selection = false;
+          fCanvas.forEachObject(obj => obj.selectable = false);
+
+          // Click anywhere to add a new text box (keeps text mode active for multiple clicks)
+          fCanvas.on('mouse:down', (options) => {
             if (currentPdfTool === 'text' && !options.target) {
-              const text = new fabric.IText('Type answer...', {
-                left: options.pointer.x,
-                top: options.pointer.y,
-                fontSize: 18,
+              const pointer = fCanvas.getPointer(options.e);
+
+              const text = new fabric.IText('Type here...', {
+                left: pointer.x,
+                top: pointer.y,
+                fontSize: 20,
                 fill: '#0070f3',
-                direction: 'auto'
+                backgroundColor: 'rgba(255,255,255,0.85)',
+                padding: 4,
+                cornerSize: 6,
+                selectable: true
               });
+
+              // Auto-clear placeholder on first edit
+              let isFirstEdit = true;
+              text.on('editing:entered', () => {
+                if (isFirstEdit && text.text === 'Type here...') {
+                  text.text = '';
+                  isFirstEdit = false;
+                  fCanvas.renderAll();
+                }
+              });
+
               fCanvas.add(text);
               fCanvas.setActiveObject(text);
               text.enterEditing();
-              setPdfTool('draw');
+              text.selectAll();
+              fCanvas.renderAll();
+              triggerSave();
             }
+          });
+        } 
+        else if (tool === 'select') {
+          // Eraser / Select Mode
+          fCanvas.isDrawingMode = false;
+          fCanvas.selection = true;
+          fCanvas.forEachObject(obj => obj.selectable = true);
+
+          // Track selection to enable individual object deletion
+          fCanvas.on('selection:created', (e) => {
+            selectedObject = e.selected[0];
+            deleteBtn.style.display = 'inline-block';
+          });
+
+          fCanvas.on('selection:updated', (e) => {
+            selectedObject = e.selected[0];
+            deleteBtn.style.display = 'inline-block';
+          });
+
+          fCanvas.on('selection:cleared', () => {
+            selectedObject = null;
+            deleteBtn.style.display = 'none';
           });
         }
       });
+    }
+
+    // Erase specific selected line or text box
+    function deleteSelectedObject() {
+      fabricCanvases.forEach(fCanvas => {
+        const activeObj = fCanvas.getActiveObject();
+        if (activeObj) {
+          fCanvas.remove(activeObj);
+          fCanvas.discardActiveObject();
+          fCanvas.renderAll();
+          triggerSave();
+        }
+      });
+      document.getElementById('delete-selected-btn').style.display = 'none';
+    }
+
+    function clearPdfCanvas() {
+      if (confirm('Clear ALL markings on this entire PDF?')) {
+        fabricCanvases.forEach(c => c.clear());
+        triggerSave();
+      }
     }
 
     function clearPdfCanvas() {
