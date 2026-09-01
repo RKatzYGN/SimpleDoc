@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Minimal Editor</title>
 
-  <!-- PDF.js & Fabric.js Libraries for Interactive PDF Annotations -->
+  <!-- PDF.js & Fabric.js Libraries -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
 
@@ -15,12 +15,8 @@
     
     /* Header Bar */
     header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0.75rem 1.5rem;
-      background: #f9f9f9;
-      border-bottom: 1px solid #eee;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.75rem 1.5rem; background: #f9f9f9; border-bottom: 1px solid #eee;
     }
     .header-left, .header-right { display: flex; align-items: center; gap: 0.75rem; }
     button { cursor: pointer; padding: 0.4rem 0.8rem; border: 1px solid #ccc; background: #fff; border-radius: 4px; font-size: 0.9rem; }
@@ -31,33 +27,21 @@
     #doc-title { font-size: 1.1rem; border: 1px dashed #ccc; padding: 0.2rem 0.5rem; background: #fff; font-weight: bold; outline: none; border-radius: 4px; }
     #status { font-size: 0.85rem; color: #666; }
 
-    /* Red Test Mode Banner with Timer */
+    /* Test Banner */
     #test-banner {
-      display: none;
-      background-color: #d93025;
-      color: white;
-      text-align: center;
-      padding: 0.6rem;
-      font-weight: bold;
-      letter-spacing: 1px;
-      font-size: 1.1rem;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      display: none; background-color: #d93025; color: white; text-align: center;
+      padding: 0.6rem; font-weight: bold; letter-spacing: 1px; font-size: 1.1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     body.test-mode-active #test-banner { display: block; }
     body.test-mode-active #drawer-btn { display: none; }
     body.test-mode-active #test-toggle-btn { display: none; }
 
-    /* PDF Toolbar Options */
+    /* PDF Toolbar */
     #pdf-toolbar {
-      display: none;
-      align-items: center;
-      gap: 0.5rem;
-      background: #eee;
-      padding: 0.4rem 1rem;
-      border-bottom: 1px solid #ddd;
+      display: none; align-items: center; gap: 0.5rem; background: #eee; padding: 0.4rem 1rem; border-bottom: 1px solid #ddd;
     }
 
-    /* Document Drawer */
+    /* Drawer */
     #drawer {
       position: fixed; top: 0; left: 0; width: 340px; height: 100%;
       background: #fafafa; border-right: 1px solid #ddd; padding: 1.5rem;
@@ -81,7 +65,7 @@
     #doc-list li.locked { opacity: 0.6; cursor: not-allowed; background: #f5f5f5; }
     .del-btn { border: none; background: transparent; color: #c00; font-size: 0.8rem; padding: 0 0.4rem; }
 
-    /* Mode Containers */
+    /* Canvas / Editor Containers */
     #editor {
       width: 100%; height: calc(100vh - 60px); padding: 3rem;
       border: none; outline: none; font-size: 1.25rem; line-height: 1.6; color: #111; overflow-y: auto;
@@ -89,34 +73,14 @@
     body.test-mode-active #editor { height: calc(100vh - 110px); }
     #editor:empty:before { content: "Start typing in English or Hebrew..."; color: #999; pointer-events: none; }
 
-    /* PDF Canvas Viewer Wrapper */
     #pdf-container {
-      display: none;
-      flex-direction: column;
-      align-items: center;
-      width: 100%;
-      height: calc(100vh - 100px);
-      overflow-y: auto;
-      padding: 2rem 0;
-      background: #e5e5e5;
+      display: none; flex-direction: column; align-items: center;
+      width: 100%; height: calc(100vh - 100px); overflow-y: auto; padding: 2rem 0; background: #e5e5e5;
     }
 
-   .canvas-wrapper {
-  position: relative;
-  margin-bottom: 2rem;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.15);
-  background: #fff;
-}
+    .canvas-wrapper { position: relative; margin-bottom: 2rem; box-shadow: 0 4px 10px rgba(0,0,0,0.15); background: #fff; }
+    .canvas-container { position: absolute !important; top: 0; left: 0; z-index: 10; }
 
-/* Ensure the upper drawing canvas receives mouse/touch events */
-.canvas-container {
-  position: absolute !important;
-  top: 0;
-  left: 0;
-  z-index: 10;
-}
-
-    /* Print Header */
     #test-print-header { display: none; }
 
     @media print {
@@ -124,21 +88,15 @@
       #editor, #pdf-container { height: auto !important; padding: 0 !important; overflow: visible !important; display: block !important; }
 
       body.test-mode-active #test-print-header {
-        display: block !important;
-        background: #f0f0f0;
-        border: 2px solid #d93025;
-        padding: 0.75rem 1rem;
-        margin-bottom: 1.5rem;
-        font-weight: bold;
-        color: #d93025;
-        font-size: 1rem;
+        display: block !important; background: #f0f0f0; border: 2px solid #d93025;
+        padding: 0.75rem 1rem; margin-bottom: 1.5rem; font-weight: bold; color: #d93025; font-size: 1rem;
       }
     }
   </style>
 </head>
 <body>
 
-  <!-- Test Banner -->
+  <!-- Test Mode Top Banner -->
   <div id="test-banner">
     ⚠️ TEST MODE ACTIVE — TIME ELAPSED: <span id="test-timer">00:00:00</span>
   </div>
@@ -157,12 +115,12 @@
     <div class="header-right">
       <span id="status">Ready</span>
       <button onclick="window.print()">🖨️ Print</button>
-      <button id="test-toggle-btn" class="danger" onclick="startTestMode()">🧪 Start Test Mode</button>
+      <button id="test-toggle-btn" class="danger" onclick="manualStartTestMode()">🧪 Start Test Mode</button>
       <button id="test-submit-btn" class="primary" style="display:none;" onclick="submitTest()">💾 Submit & Save Test</button>
     </div>
   </header>
 
- <!-- PDF Annotation Toolbar -->
+  <!-- PDF Tools -->
   <div id="pdf-toolbar">
     <strong>PDF Tools:</strong>
     <button id="tool-draw" class="active" onclick="setPdfTool('draw')">✏️ Circle / Draw</button>
@@ -191,22 +149,19 @@
     <ul id="doc-list"></ul>
   </div>
 
-  <!-- View Mode 1: Standard Text Editor (Google Docs / Typed Text) -->
+  <!-- View Mode 1: Standard Text Editor -->
   <div id="editor" contenteditable="true" dir="auto" spellcheck="true"></div>
 
-  <!-- View Mode 2: PDF Canvas Overlay Container -->
+  <!-- View Mode 2: PDF Canvas Container -->
   <div id="pdf-container"></div>
 
-  <!-- Supabase Library -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <script>
-    // --- SUPABASE CONFIGURATION ---
     const API_URL = 'https://vrlksitffjyramoqxxeq.supabase.co';
     const API_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZybGtzaXRmZmp5cmFtb3F4eGVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwOTg3ODYsImV4cCI6MjEwMzY3NDc4Nn0.ZCsFV5tQy2tf4r1Rk9CV7xKlyebfZCtg7SQDvJHF3gY';
     const dbClient = window.supabase.createClient(API_URL, API_KEY);
 
-    // Initialize PDF.js worker
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
 
     let documents = [];
@@ -216,11 +171,9 @@
     let isTestMode = false;
     let saveTimeout = null;
 
-    // PDF Annotation Canvas Variables
     let fabricCanvases = [];
     let currentPdfTool = 'draw';
 
-    // Timer Variables
     let timerInterval = null;
     let secondsElapsed = 0;
 
@@ -307,18 +260,23 @@
         return;
       }
 
+      // If document is marked as an unstarted test assignment, prompt student
+      if (doc.is_test && !isTestMode) {
+        if (!confirm(`" ${doc.title} " is a Test Assignment.\n\nDo you want to start this test now?`)) {
+          return;
+        }
+        activateTestModeSession();
+      }
+
       currentDocId = id;
       titleInput.value = doc.title || 'Untitled Document';
 
-      // DETERMINE VIEW MODE (PDF Canvas vs Standard Text Editor)
       if (doc.file_url) {
-        // Show PDF Viewer Canvas
         editor.style.display = 'none';
         pdfContainer.style.display = 'flex';
         pdfToolbar.style.display = 'flex';
         await renderPdfViewer(doc.file_url, doc.content);
       } else {
-        // Show Standard Text Editor (Google Docs / Typed Text)
         pdfContainer.style.display = 'none';
         pdfToolbar.style.display = 'none';
         editor.style.display = 'block';
@@ -339,7 +297,12 @@
         if (doc.is_locked) li.classList.add('locked');
         
         const span = document.createElement('span');
-        let icon = doc.file_url ? '📄 ' : '📝 ';
+        
+        // Distinct Icons per Document Type
+        let icon = '📝 '; // Blank Text Doc
+        if (doc.file_url) icon = '📑 '; // PDF Worksheet
+        else if (doc.content && doc.content.includes('<p>')) icon = '📄 '; // Uploaded Doc/Worksheet
+
         if (doc.is_locked) icon = '🔒 ';
         else if (doc.is_test) icon = '🧪 ';
 
@@ -385,7 +348,7 @@
       else await createNewDoc();
     }
 
-    // --- PDF ANNOTATION ENGINE (PDF.js + Fabric.js) ---
+    // --- PDF ANNOTATION ENGINE ---
     async function renderPdfViewer(pdfUrl, savedAnnotationJson) {
       pdfContainer.innerHTML = '';
       fabricCanvases = [];
@@ -417,20 +380,17 @@
           wrapper.appendChild(overlayCanvas);
           pdfContainer.appendChild(wrapper);
 
-          // Render PDF page to background canvas
           await page.render({ canvasContext: bgCanvas.getContext('2d'), viewport }).promise;
 
-          // Overlay Fabric.js interactive canvas for drawing & typing
           const fCanvas = new fabric.Canvas(overlayCanvas.id, {
             width: viewport.width,
             height: viewport.height,
             isDrawingMode: true
           });
 
-          fCanvas.freeDrawingBrush.color = '#d93025'; // Red pen for circling
+          fCanvas.freeDrawingBrush.color = '#d93025';
           fCanvas.freeDrawingBrush.width = 3;
 
-          // Load saved markings
           if (annotations[pageNum - 1]) {
             fCanvas.loadFromJSON(annotations[pageNum - 1]);
           }
@@ -441,17 +401,16 @@
           fabricCanvases.push(fCanvas);
         }
 
+        setPdfTool('draw');
         statusEl.innerText = 'Saved';
       } catch (err) {
         statusEl.innerText = 'PDF Load Error';
       }
     }
-let selectedObject = null;
 
     function setPdfTool(tool) {
       currentPdfTool = tool;
 
-      // Update button highlights
       document.getElementById('tool-draw').classList.toggle('active', tool === 'draw');
       document.getElementById('tool-text').classList.toggle('active', tool === 'text');
       document.getElementById('tool-select').classList.toggle('active', tool === 'select');
@@ -460,7 +419,6 @@ let selectedObject = null;
       if (tool !== 'select') deleteBtn.style.display = 'none';
 
       fabricCanvases.forEach(fCanvas => {
-        // Remove old listeners
         fCanvas.off('mouse:down');
         fCanvas.off('selection:created');
         fCanvas.off('selection:cleared');
@@ -469,17 +427,14 @@ let selectedObject = null;
           fCanvas.isDrawingMode = true;
           fCanvas.selection = false;
           fCanvas.forEachObject(obj => obj.selectable = false);
-        } 
-        else if (tool === 'text') {
+        } else if (tool === 'text') {
           fCanvas.isDrawingMode = false;
           fCanvas.selection = false;
           fCanvas.forEachObject(obj => obj.selectable = false);
 
-          // Click anywhere to add a new text box (keeps text mode active for multiple clicks)
           fCanvas.on('mouse:down', (options) => {
             if (currentPdfTool === 'text' && !options.target) {
               const pointer = fCanvas.getPointer(options.e);
-
               const text = new fabric.IText('Type here...', {
                 left: pointer.x,
                 top: pointer.y,
@@ -487,11 +442,9 @@ let selectedObject = null;
                 fill: '#0070f3',
                 backgroundColor: 'rgba(255,255,255,0.85)',
                 padding: 4,
-                cornerSize: 6,
                 selectable: true
               });
 
-              // Auto-clear placeholder on first edit
               let isFirstEdit = true;
               text.on('editing:entered', () => {
                 if (isFirstEdit && text.text === 'Type here...') {
@@ -504,38 +457,22 @@ let selectedObject = null;
               fCanvas.add(text);
               fCanvas.setActiveObject(text);
               text.enterEditing();
-              text.selectAll();
               fCanvas.renderAll();
               triggerSave();
             }
           });
-        } 
-        else if (tool === 'select') {
-          // Eraser / Select Mode
+        } else if (tool === 'select') {
           fCanvas.isDrawingMode = false;
           fCanvas.selection = true;
           fCanvas.forEachObject(obj => obj.selectable = true);
 
-          // Track selection to enable individual object deletion
-          fCanvas.on('selection:created', (e) => {
-            selectedObject = e.selected[0];
-            deleteBtn.style.display = 'inline-block';
-          });
-
-          fCanvas.on('selection:updated', (e) => {
-            selectedObject = e.selected[0];
-            deleteBtn.style.display = 'inline-block';
-          });
-
-          fCanvas.on('selection:cleared', () => {
-            selectedObject = null;
-            deleteBtn.style.display = 'none';
-          });
+          fCanvas.on('selection:created', () => deleteBtn.style.display = 'inline-block');
+          fCanvas.on('selection:updated', () => deleteBtn.style.display = 'inline-block');
+          fCanvas.on('selection:cleared', () => deleteBtn.style.display = 'none');
         }
       });
     }
 
-    // Erase specific selected line or text box
     function deleteSelectedObject() {
       fabricCanvases.forEach(fCanvas => {
         const activeObj = fCanvas.getActiveObject();
@@ -551,13 +488,6 @@ let selectedObject = null;
 
     function clearPdfCanvas() {
       if (confirm('Clear ALL markings on this entire PDF?')) {
-        fabricCanvases.forEach(c => c.clear());
-        triggerSave();
-      }
-    }
-
-    function clearPdfCanvas() {
-      if (confirm('Clear all drawings and text on this PDF?')) {
         fabricCanvases.forEach(c => c.clear());
         triggerSave();
       }
@@ -581,11 +511,9 @@ let selectedObject = null;
       let content = '';
 
       if (currentDoc && currentDoc.file_url) {
-        // Save PDF canvas vector data
         const annotationData = fabricCanvases.map(c => c.toJSON());
         content = JSON.stringify(annotationData);
       } else {
-        // Save HTML text
         content = editor.innerHTML;
       }
 
@@ -603,7 +531,7 @@ let selectedObject = null;
       statusEl.innerText = error ? 'Save Error' : 'Saved';
     }
 
-    // --- TEST MODE LOGIC ---
+    // --- TEST MODE SESSION MANAGEMENT ---
     function formatTime(totalSeconds) {
       const hrs = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
       const mins = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
@@ -617,13 +545,24 @@ let selectedObject = null;
       document.getElementById('test-timer-print').innerText = formatted;
     }
 
-    async function startTestMode() {
-      if (!confirm("Start Test Mode? This will start a timed session.")) return;
-
+    function activateTestModeSession() {
       isTestMode = true;
       document.body.classList.add('test-mode-active');
       document.getElementById('test-submit-btn').style.display = 'inline-block';
       document.getElementById('drawer').classList.remove('open');
+
+      secondsElapsed = 0;
+      updateTimerDisplays(0);
+      clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        secondsElapsed++;
+        updateTimerDisplays(secondsElapsed);
+      }, 1000);
+      statusEl.innerText = 'TEST IN PROGRESS';
+    }
+
+    async function manualStartTestMode() {
+      if (!confirm("Start Test Mode? This will start a new blank timed test.")) return;
 
       const initialTitle = `Test - ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`;
       titleInput.value = initialTitle;
@@ -638,20 +577,12 @@ let selectedObject = null;
         currentDocId = data.id;
         documents.unshift(data);
         editor.innerHTML = '';
-        statusEl.innerText = 'TEST IN PROGRESS';
-
-        secondsElapsed = 0;
-        updateTimerDisplays(0);
-        clearInterval(timerInterval);
-        timerInterval = setInterval(() => {
-          secondsElapsed++;
-          updateTimerDisplays(secondsElapsed);
-        }, 1000);
+        activateTestModeSession();
       }
     }
 
     async function submitTest() {
-      if (!confirm("Submit test? Document will be locked.")) return;
+      if (!confirm("Submit test? The test will be saved and permanently locked.")) return;
 
       clearInterval(timerInterval);
       const completionTime = new Date().toLocaleString();
@@ -663,16 +594,22 @@ let selectedObject = null;
         </div>
       `;
 
-      const title = titleInput.value;
-      const content = durationBannerHTML + editor.innerHTML;
+      const currentDoc = documents.find(d => d.id === currentDocId);
+      let content = '';
 
-      await dbClient.from('documents').update({ title, content, is_locked: true }).eq('id', currentDocId);
+      if (currentDoc && currentDoc.file_url) {
+        content = JSON.stringify(fabricCanvases.map(c => c.toJSON()));
+      } else {
+        content = durationBannerHTML + editor.innerHTML;
+      }
+
+      await dbClient.from('documents').update({ title: titleInput.value, content, is_locked: true, is_test: true }).eq('id', currentDocId);
 
       isTestMode = false;
       document.body.classList.remove('test-mode-active');
       document.getElementById('test-submit-btn').style.display = 'none';
 
-      alert(`Test submitted! Total time: ${durationFormatted}`);
+      alert(`Test submitted successfully! Total time: ${durationFormatted}`);
       fetchDocuments();
     }
 
