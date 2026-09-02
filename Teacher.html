@@ -12,6 +12,32 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f6f8; height: 100vh; display: flex; flex-direction: column; }
     
+    /* Password Login Modal Overlay */
+    #login-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: #0f172a; display: flex; justify-content: center; align-items: center; z-index: 1000;
+    }
+    .login-box {
+      background: #fff; padding: 2.5rem; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+      width: 100%; max-width: 400px; text-align: center;
+    }
+    .login-box h2 { margin-bottom: 0.5rem; color: #0f172a; }
+    .login-box p { font-size: 0.9rem; color: #64748b; margin-bottom: 1.5rem; }
+    .login-box input[type="password"] {
+      width: 100%; padding: 0.75rem; font-size: 1rem; border: 1px solid #cbd5e1;
+      border-radius: 4px; margin-bottom: 1rem; outline: none; text-align: center;
+    }
+    .login-box input[type="password"]:focus { border-color: #0070f3; }
+    .login-box button {
+      width: 100%; padding: 0.75rem; background: #0070f3; color: white;
+      border: none; border-radius: 4px; font-weight: bold; font-size: 1rem; cursor: pointer;
+    }
+    .login-box button:hover { background: #0059b3; }
+    #login-error { color: #dc2626; font-size: 0.85rem; margin-top: 0.75rem; display: none; font-weight: bold; }
+
+    /* Teacher Portal Main UI */
+    #app-content { display: none; height: 100vh; flex-direction: column; }
+
     header {
       background: #1e293b; color: white; padding: 0.75rem 1.5rem; display: flex;
       justify-content: space-between; align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1);
@@ -76,56 +102,69 @@
 </head>
 <body>
 
-  <header>
-    <h2>📊 Teacher Retrieval & Gradebook</h2>
-    <div class="header-controls">
-      <select id="folder-filter" onchange="filterDocuments()">
-        <option value="ALL">📁 All Folders</option>
-      </select>
-      <button id="grade-btn" class="success" style="display:none;" onclick="startGradingSession()">📝 Grade This Paper</button>
-      <button id="save-grade-btn" class="primary" style="display:none;" onclick="saveGradedPaper()">💾 Save Grade & Markings</button>
-      <button id="delete-btn" class="danger" style="display:none;" onclick="deleteCurrentDocument()">🗑️ Delete</button>
-      <button onclick="window.print()">🖨️ Print</button>
+  <div id="login-overlay">
+    <div class="login-box">
+      <h2>🔒 Teacher Portal</h2>
+      <p>Enter the teacher access password to review and grade papers.</p>
+      <input type="password" id="password-input" placeholder="Enter Password" onkeydown="if(event.key==='Enter') checkPassword()">
+      <button onclick="checkPassword()">Log In</button>
+      <div id="login-error">Incorrect password. Please try again.</div>
     </div>
-  </header>
-
-  <div id="grading-toolbar">
-    <strong>🍎 TEACHER TOOLS:</strong>
-    <span id="pdf-grading-tools" style="display:none; gap: 0.5rem; align-items: center;">
-      <button id="tool-draw" class="active" onclick="setGradingTool('draw')">✏️ Red Pen</button>
-      <button id="tool-text" onclick="setGradingTool('text')">🔤 Add Text Box</button>
-      <button id="tool-check" onclick="setGradingTool('check')">✅ Green Check Stamp</button>
-      <button id="tool-x" onclick="setGradingTool('x')">❌ Red X Stamp</button>
-      <button id="tool-select" onclick="setGradingTool('select')">🖐️ Select / Erase</button>
-      <button id="del-obj-btn" class="danger" style="display:none;" onclick="deleteGradingObject()">🗑️ Erase Selected</button>
-    </span>
-    <span id="text-grading-info" style="display:none;">
-      <em>Click anywhere in the text to type comments directly in <span style="color:#dc2626; font-weight:bold;">Red Ink</span>.</em>
-    </span>
   </div>
 
-  <div class="main-layout">
-    <div class="sidebar">
-      <div class="filter-tabs">
-        <button class="tab-btn active" id="tab-all" onclick="setTab('all')">All Work</button>
-        <button class="tab-btn" id="tab-tests" onclick="setTab('tests')">🧪 Tests Only</button>
+  <div id="app-content">
+    <header>
+      <h2>📊 Teacher Retrieval & Gradebook</h2>
+      <div class="header-controls">
+        <select id="folder-filter" onchange="filterDocuments()">
+          <option value="ALL">📁 All Folders</option>
+        </select>
+        <button id="grade-btn" class="success" style="display:none;" onclick="startGradingSession()">📝 Grade This Paper</button>
+        <button id="save-grade-btn" class="primary" style="display:none;" onclick="saveGradedPaper()">💾 Save Grade & Markings</button>
+        <button id="delete-btn" class="danger" style="display:none;" onclick="deleteCurrentDocument()">🗑️ Delete</button>
+        <button onclick="window.print()">🖨️ Print</button>
       </div>
-      <ul id="doc-list"></ul>
+    </header>
+
+    <div id="grading-toolbar">
+      <strong>🍎 TEACHER TOOLS:</strong>
+      <span id="pdf-grading-tools" style="display:none; gap: 0.5rem; align-items: center;">
+        <button id="tool-draw" class="active" onclick="setGradingTool('draw')">✏️ Red Pen</button>
+        <button id="tool-text" onclick="setGradingTool('text')">🔤 Add Text Box</button>
+        <button id="tool-check" onclick="setGradingTool('check')">✅ Green Check Stamp</button>
+        <button id="tool-x" onclick="setGradingTool('x')">❌ Red X Stamp</button>
+        <button id="tool-select" onclick="setGradingTool('select')">🖐️ Select / Erase</button>
+        <button id="del-obj-btn" class="danger" style="display:none;" onclick="deleteGradingObject()">🗑️ Erase Selected</button>
+      </span>
+      <span id="text-grading-info" style="display:none;">
+        <em>Click anywhere in the text to type comments directly in <span style="color:#dc2626; font-weight:bold;">Red Ink</span>.</em>
+      </span>
     </div>
 
-    <div class="preview-pane">
-      <div id="empty-state" class="empty-state">
-        <h3>👈 Select a document from the sidebar to review or grade</h3>
+    <div class="main-layout">
+      <div class="sidebar">
+        <div class="filter-tabs">
+          <button class="tab-btn active" id="tab-all" onclick="setTab('all')">All Work</button>
+          <button class="tab-btn" id="tab-tests" onclick="setTab('tests')">🧪 Tests Only</button>
+        </div>
+        <ul id="doc-list"></ul>
       </div>
 
-      <div id="text-viewer" contenteditable="false" dir="auto"></div>
+      <div class="preview-pane">
+        <div id="empty-state" class="empty-state">
+          <h3>👈 Select a document from the sidebar to review or grade</h3>
+        </div>
 
-      <div id="pdf-viewer"></div>
+        <div id="text-viewer" contenteditable="false" dir="auto"></div>
+        <div id="pdf-viewer"></div>
+      </div>
     </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
+    const TEACHER_PASSWORD = 'RTGrading';
+
     const API_URL = 'https://vrlksitffjyramoqxxeq.supabase.co';
     const API_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZybGtzaXRmZmp5cmFtb3F4eGVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwOTg3ODYsImV4cCI6MjEwMzY3NDc4Nn0.ZCsFV5tQy2tf4r1Rk9CV7xKlyebfZCtg7SQDvJHF3gY';
     const dbClient = window.supabase.createClient(API_URL, API_KEY);
@@ -154,7 +193,21 @@
     const pdfGradingTools = document.getElementById('pdf-grading-tools');
     const textGradingInfo = document.getElementById('text-grading-info');
 
-    async function init() {
+    // --- LOGIN AUTHENTICATION ---
+    function checkPassword() {
+      const input = document.getElementById('password-input').value;
+      const errorMsg = document.getElementById('login-error');
+
+      if (input === TEACHER_PASSWORD) {
+        document.getElementById('login-overlay').style.display = 'none';
+        document.getElementById('app-content').style.display = 'flex';
+        initGradebook();
+      } else {
+        errorMsg.style.display = 'block';
+      }
+    }
+
+    async function initGradebook() {
       await fetchFolders();
       await fetchDocuments();
     }
@@ -281,7 +334,7 @@
       textViewer.classList.remove('grading-active');
     }
 
-    // --- PDF GRADNG CANVAS (Fabric.js Overlay) ---
+    // --- PDF GRADNG CANVAS ---
     async function renderPdfAnnotations(pdfUrl, savedAnnotationJson, interactive) {
       pdfViewer.innerHTML = '';
       fabricCanvases = [];
@@ -374,7 +427,6 @@
             if (currentGradingTool === 'text' && !options.target) {
               const pointer = fCanvas.getPointer(options.e);
 
-              // Empty text box initialized with instant focus cursor
               const text = new fabric.IText(' ', {
                 left: pointer.x,
                 top: pointer.y,
@@ -399,7 +451,6 @@
           fCanvas.selection = false;
           fCanvas.forEachObject(obj => obj.selectable = false);
 
-          // Click to stamp Checkmark or Red X
           fCanvas.on('mouse:down', (options) => {
             if ((currentGradingTool === 'check' || currentGradingTool === 'x') && !options.target) {
               const pointer = fCanvas.getPointer(options.e);
@@ -443,7 +494,7 @@
       document.getElementById('del-obj-btn').style.display = 'none';
     }
 
-    // --- SAVE GRADED WORK BACK TO SUPABASE ---
+    // --- SAVE GRADED WORK ---
     async function saveGradedPaper() {
       if (!selectedDocId) return;
 
@@ -493,8 +544,6 @@
         renderDocList();
       }
     }
-
-    init();
   </script>
 </body>
 </html>
