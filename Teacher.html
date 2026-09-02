@@ -79,9 +79,21 @@
     /* Preview Workspace */
     .preview-pane { flex-grow: 1; padding: 2rem; overflow-y: auto; background: #f8fafc; display: flex; flex-direction: column; align-items: center; }
     
+    /* Text Document Wrapper with Transparent Drawing Overlay */
+    .text-document-container {
+      position: relative; width: 100%; max-width: 800px; background: white;
+      border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: none;
+    }
+
     #text-viewer {
-      width: 100%; max-width: 800px; background: white; padding: 3rem;
-      border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: none; line-height: 1.6; font-size: 1.1rem; outline: none;
+      padding: 3rem; line-height: 1.6; font-size: 1.1rem; color: #111; word-wrap: break-word;
+    }
+
+    .text-overlay-canvas-container {
+      position: absolute !important; top: 0; left: 0; z-index: 10; pointer-events: none;
+    }
+    .text-overlay-canvas-container.interactive {
+      pointer-events: auto;
     }
 
     #pdf-viewer { display: none; flex-direction: column; align-items: center; gap: 1.5rem; width: 100%; }
@@ -93,7 +105,7 @@
     @media print {
       header, .sidebar, #grading-toolbar { display: none !important; }
       .preview-pane { padding: 0 !important; background: white !important; }
-      #text-viewer, #pdf-viewer { display: block !important; box-shadow: none !important; width: 100% !important; border: none !important; }
+      .text-document-container, #pdf-viewer { display: block !important; box-shadow: none !important; width: 100% !important; }
     }
   </style>
 </head>
@@ -149,7 +161,11 @@
           <h3>👈 Select a document from the sidebar to review or grade</h3>
         </div>
 
-        <div id="text-viewer" contenteditable="false" dir="auto"></div>
+        <div id="text-doc-container" class="text-document-container">
+          <div id="text-viewer" dir="auto"></div>
+          <canvas id="text-overlay-canvas"></canvas>
+        </div>
+
         <div id="pdf-viewer"></div>
       </div>
     </div>
@@ -172,10 +188,12 @@
     let isGradingMode = false;
 
     let fabricCanvases = [];
+    let textOverlayFabricCanvas = null;
     let currentGradingTool = 'draw';
 
     const folderFilter = document.getElementById('folder-filter');
     const docListEl = document.getElementById('doc-list');
+    const textDocContainer = document.getElementById('text-doc-container');
     const textViewer = document.getElementById('text-viewer');
     const pdfViewer = document.getElementById('pdf-viewer');
     const emptyState = document.getElementById('empty-state');
@@ -279,19 +297,58 @@
       deleteBtn.style.display = 'inline-block';
 
       if (doc.file_url) {
-        textViewer.style.display = 'none';
+        textDocContainer.style.display = 'none';
         pdfViewer.style.display = 'flex';
         await renderPdfAnnotations(doc.file_url, doc.content, false);
       } else {
         pdfViewer.style.display = 'none';
-        textViewer.style.display = 'block';
-        textViewer.contentEditable = "false";
+        textDocContainer.style.display = 'block';
         textViewer.innerHTML = doc.content || '<em>(Empty Document)</em>';
+        setupTextOverlayCanvas(doc.teacher_annotations, false);
       }
     }
 
-    // --- UNIVERSAL CANVAS GRADING ACTIVATION ---
-    async function startGradingSession() {
+    function setupTextOverlayCanvas(savedAnnotations, interactive) {
+      if (textOverlayFabricCanvas) {
+        textOverlayFabricCanvas.dispose();
+      }
+
+      const w = textDocContainer.clientWidth || 800;
+      const h = textDocContainer.clientHeight || 1000;
+
+      const overlayEl = document.getElementById('text-overlay-canvas');
+      overlayEl.width = w;
+      overlayEl.height = h;
+
+      textOverlayFabricCanvas = new fabric.Canvas('text-overlay-canvas', {
+        width: w,
+        height: h,
+        isDrawingMode: interactive,
+        selection: interactive
+      });
+
+      const wrapperEl = textOverlayFabricCanvas.wrapperEl;
+      if (interactive) wrapperEl.classList.add('interactive');
+      else wrapperEl.classList.remove('interactive');
+
+      textOverlayFabricCanvas.freeDrawingBrush.color = '#dc2626';
+      textOverlayFabricCanvas.freeDrawingBrush.width = 3;
+
+      if (savedAnnotations) {
+        try {
+          const parsed = JSON.parse(savedAnnotations);
+          textOverlayFabricCanvas.loadFromJSON(parsed[0], () => {
+            if (!interactive) textOverlayFabricCanvas.forEachObject(o => o.selectable = false);
+            textOverlayFabricCanvas.renderAll();
+          });
+        } catch(e) {}
+      }
+
+      fabricCanvases = [textOverlayFabricCanvas];
+    }
+
+    // --- GRADING MODE ACTIVATION ---
+    function startGradingSession() {
       const doc = documents.find(d => d.id === selectedDocId);
       if (!doc) return;
 
@@ -303,71 +360,8 @@
       if (doc.file_url) {
         enablePdfGradingCanvas();
       } else {
-        // Convert Text/Test paper into a reliable SVG-backed canvas
-        const htmlContent = textViewer.innerHTML;
-        const width = 800;
-        const height = Math.max(textViewer.offsetHeight, 1000);
-
-        textViewer.style.display = 'none';
-        pdfViewer.style.display = 'flex';
-        pdfViewer.innerHTML = '';
-        fabricCanvases = [];
-
-        const wrapper = document.createElement('div');
-        wrapper.className = 'canvas-wrapper';
-        wrapper.style.width = width + 'px';
-        wrapper.style.height = height + 'px';
-
-        const bgCanvas = document.createElement('canvas');
-        bgCanvas.width = width;
-        bgCanvas.height = height;
-        const ctx = bgCanvas.getContext('2d');
-
-        // Draw white background
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, width, height);
-
-        // Convert HTML text to SVG image layer
-        const svgData = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
-          <foreignObject width="100%" height="100%">
-            <div xmlns="http://www.w3.org/1999/xhtml" style="font-family: sans-serif; font-size: 18px; line-height: 1.6; padding: 30px; color: #111; background: #fff;">
-              ${htmlContent}
-            </div>
-          </foreignObject>
-        </svg>`;
-
-        const img = new Image();
-        img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgData);
-
-        img.onload = () => {
-          ctx.drawImage(img, 0, 0);
-
-          const overlayCanvas = document.createElement('canvas');
-          overlayCanvas.id = 'text-doc-grading-canvas';
-          wrapper.appendChild(bgCanvas);
-          wrapper.appendChild(overlayCanvas);
-          pdfViewer.appendChild(wrapper);
-
-          const fCanvas = new fabric.Canvas('text-doc-grading-canvas', {
-            width: width,
-            height: height,
-            isDrawingMode: true
-          });
-
-          fCanvas.freeDrawingBrush.color = '#dc2626';
-          fCanvas.freeDrawingBrush.width = 3;
-
-          // Load previously saved teacher markups if present
-          if (doc.teacher_annotations) {
-            try {
-              const parsed = JSON.parse(doc.teacher_annotations);
-              fCanvas.loadFromJSON(parsed[0], () => fCanvas.renderAll());
-            } catch(e) {}
-          }
-
-          fabricCanvases = [fCanvas];
-          setGradingTool('draw');
-        };
+        setupTextOverlayCanvas(doc.teacher_annotations, true);
+        setGradingTool('draw');
       }
     }
 
@@ -378,7 +372,7 @@
       if (selectedDocId) gradeBtn.style.display = 'inline-block';
     }
 
-    // --- PDF / CANVAS ANNOTATION ENGINE ---
+    // --- PDF ANNOTATION ENGINE ---
     async function renderPdfAnnotations(pdfUrl, savedAnnotationJson, interactive) {
       pdfViewer.innerHTML = '';
       fabricCanvases = [];
@@ -582,7 +576,7 @@
       if (!error) {
         documents = documents.filter(d => d.id !== selectedDocId);
         selectedDocId = null;
-        textViewer.style.display = 'none';
+        textDocContainer.style.display = 'none';
         pdfViewer.style.display = 'none';
         emptyState.style.display = 'block';
         gradeBtn.style.display = 'none';
