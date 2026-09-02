@@ -11,7 +11,7 @@
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; background: #fff; }
+    html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; background: #fff; touch-action: manipulation; }
     
     /* Header Bar */
     header {
@@ -133,11 +133,11 @@
   <!-- PDF Tools -->
   <div id="pdf-toolbar">
     <strong>PDF Tools:</strong>
-    <button id="tool-draw" class="active" onclick="setPdfTool('draw')">✏️ Circle / Draw</button>
-    <button id="tool-text" onclick="setPdfTool('text')">🔤 Add Text</button>
-    <button id="tool-select" onclick="setPdfTool('select')">🖐️ Select / Erase</button>
+    <button id="tool-draw" class="active" onclick="setPdfTool('draw')">✏️ Draw / Drag Line</button>
+    <button id="tool-select" onclick="setPdfTool('select')">🖐️ Select / Move</button>
     <button id="delete-selected-btn" class="danger" style="display:none;" onclick="deleteSelectedObject()">🗑️ Delete Selected</button>
     <button onclick="clearPdfCanvas()">⚠️ Clear All</button>
+    <span style="font-size:0.8rem; color:#666; margin-left: auto;">💡 <em>Drag/Touch to draw lines. Double tap/click to insert text box.</em></span>
   </div>
 
   <!-- Navigation Drawer -->
@@ -377,7 +377,7 @@
       }
     }
 
-    // --- PDF ANNOTATION ENGINE ---
+    // --- TOUCH & PDF ANNOTATION ENGINE ---
     async function renderPdfViewer(pdfUrl, savedAnnotationJson) {
       pdfContainer.innerHTML = '';
       fabricCanvases = [];
@@ -427,49 +427,22 @@
           fCanvas.on('object:added', triggerSave);
           fCanvas.on('object:modified', triggerSave);
 
-          fabricCanvases.push(fCanvas);
-        }
-
-        setPdfTool('draw');
-        statusEl.innerText = 'Saved';
-      } catch (err) {
-        statusEl.innerText = 'PDF Load Error';
-      }
-    }
-
-    function setPdfTool(tool) {
-      currentPdfTool = tool;
-
-      document.getElementById('tool-draw').classList.toggle('active', tool === 'draw');
-      document.getElementById('tool-text').classList.toggle('active', tool === 'text');
-      document.getElementById('tool-select').classList.toggle('active', tool === 'select');
-
-      const deleteBtn = document.getElementById('delete-selected-btn');
-      if (tool !== 'select') deleteBtn.style.display = 'none';
-
-      fabricCanvases.forEach(fCanvas => {
-        fCanvas.off('mouse:down');
-        fCanvas.off('selection:created');
-        fCanvas.off('selection:cleared');
-
-        if (tool === 'draw') {
-          fCanvas.isDrawingMode = true;
-          fCanvas.selection = false;
-          fCanvas.forEachObject(obj => obj.selectable = false);
-        } else if (tool === 'text') {
-          fCanvas.isDrawingMode = false;
-          fCanvas.selection = false;
-          fCanvas.forEachObject(obj => obj.selectable = false);
-
+          // DOUBLE-TAP / DOUBLE-CLICK TOUCH HANDLER FOR TEXTBOXES
+          let lastTapTime = 0;
           fCanvas.on('mouse:down', (options) => {
-            if (currentPdfTool === 'text' && !options.target) {
+            const currentTime = new Date().getTime();
+            const tapLength = currentTime - lastTapTime;
+
+            if (tapLength < 300 && tapLength > 0) {
+              // DOUBLE TAP DETECTED
               const pointer = fCanvas.getPointer(options.e);
+
               const text = new fabric.IText('Type here...', {
-                left: pointer.x,
-                top: pointer.y,
+                left: pointer.x - 20,
+                top: pointer.y - 10,
                 fontSize: 20,
                 fill: '#0070f3',
-                backgroundColor: 'rgba(255,255,255,0.85)',
+                backgroundColor: 'rgba(255,255,255,0.9)',
                 padding: 4,
                 selectable: true
               });
@@ -489,7 +462,36 @@
               fCanvas.renderAll();
               triggerSave();
             }
+            lastTapTime = currentTime;
           });
+
+          fabricCanvases.push(fCanvas);
+        }
+
+        setPdfTool('draw');
+        statusEl.innerText = 'Saved';
+      } catch (err) {
+        statusEl.innerText = 'PDF Load Error';
+      }
+    }
+
+    function setPdfTool(tool) {
+      currentPdfTool = tool;
+
+      document.getElementById('tool-draw').classList.toggle('active', tool === 'draw');
+      document.getElementById('tool-select').classList.toggle('active', tool === 'select');
+
+      const deleteBtn = document.getElementById('delete-selected-btn');
+      if (tool !== 'select') deleteBtn.style.display = 'none';
+
+      fabricCanvases.forEach(fCanvas => {
+        fCanvas.off('selection:created');
+        fCanvas.off('selection:cleared');
+
+        if (tool === 'draw') {
+          fCanvas.isDrawingMode = true;
+          fCanvas.selection = false;
+          fCanvas.forEachObject(obj => obj.selectable = false);
         } else if (tool === 'select') {
           fCanvas.isDrawingMode = false;
           fCanvas.selection = true;
