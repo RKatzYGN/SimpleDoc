@@ -29,7 +29,7 @@
     /* Teacher Grading Toolbar */
     #grading-toolbar {
       display: none; background: #fee2e2; border-bottom: 2px solid #ef4444;
-      padding: 0.5rem 1.5rem; align-items: center; gap: 1rem; font-size: 0.9rem; color: #991b1b;
+      padding: 0.5rem 1.5rem; align-items: center; gap: 0.75rem; font-size: 0.9rem; color: #991b1b;
     }
 
     .main-layout { display: flex; flex-grow: 1; overflow: hidden; }
@@ -67,12 +67,6 @@
 
     .empty-state { text-align: center; color: #94a3b8; margin-top: 5rem; }
 
-    /* Teacher Red Corrections Tag */
-    .teacher-note {
-      background: #fef2f2; border-left: 4px solid #dc2626; padding: 0.75rem;
-      margin-top: 1rem; color: #991b1b; font-size: 0.95rem; font-weight: bold;
-    }
-
     @media print {
       header, .sidebar, #grading-toolbar { display: none !important; }
       .preview-pane { padding: 0 !important; background: white !important; }
@@ -96,15 +90,17 @@
   </header>
 
   <div id="grading-toolbar">
-    <strong>🍎 TEACHER GRADING MODE ACTIVE:</strong>
+    <strong>🍎 TEACHER TOOLS:</strong>
     <span id="pdf-grading-tools" style="display:none; gap: 0.5rem; align-items: center;">
       <button id="tool-draw" class="active" onclick="setGradingTool('draw')">✏️ Red Pen</button>
-      <button id="tool-text" onclick="setGradingTool('text')">🔤 Add Score / Note</button>
-      <button id="tool-select" onclick="setGradingTool('select')">🖐️ Move / Erase</button>
+      <button id="tool-text" onclick="setGradingTool('text')">🔤 Add Text Box</button>
+      <button id="tool-check" onclick="setGradingTool('check')">✅ Green Check Stamp</button>
+      <button id="tool-x" onclick="setGradingTool('x')">❌ Red X Stamp</button>
+      <button id="tool-select" onclick="setGradingTool('select')">🖐️ Select / Erase</button>
       <button id="del-obj-btn" class="danger" style="display:none;" onclick="deleteGradingObject()">🗑️ Erase Selected</button>
     </span>
     <span id="text-grading-info" style="display:none;">
-      <em>Click anywhere inside the text to type comments/corrections directly in <span style="color:#dc2626; font-weight:bold;">Red Ink</span>.</em>
+      <em>Click anywhere in the text to type comments directly in <span style="color:#dc2626; font-weight:bold;">Red Ink</span>.</em>
     </span>
   </div>
 
@@ -272,7 +268,7 @@
         textViewer.contentEditable = "true";
         textViewer.classList.add('grading-active');
         document.execCommand('styleWithCSS', false, true);
-        document.execCommand('foreColor', false, '#dc2626'); // Set red text ink
+        document.execCommand('foreColor', false, '#dc2626');
       }
     }
 
@@ -323,7 +319,7 @@
             selection: interactive
           });
 
-          fCanvas.freeDrawingBrush.color = '#dc2626'; // Bright Red Teacher Ink
+          fCanvas.freeDrawingBrush.color = '#dc2626';
           fCanvas.freeDrawingBrush.width = 3;
 
           if (annotations[pageNum - 1]) {
@@ -353,6 +349,8 @@
 
       document.getElementById('tool-draw').classList.toggle('active', tool === 'draw');
       document.getElementById('tool-text').classList.toggle('active', tool === 'text');
+      document.getElementById('tool-check').classList.toggle('active', tool === 'check');
+      document.getElementById('tool-x').classList.toggle('active', tool === 'x');
       document.getElementById('tool-select').classList.toggle('active', tool === 'select');
 
       const delBtn = document.getElementById('del-obj-btn');
@@ -375,7 +373,9 @@
           fCanvas.on('mouse:down', (options) => {
             if (currentGradingTool === 'text' && !options.target) {
               const pointer = fCanvas.getPointer(options.e);
-              const text = new fabric.IText('10/10 Excellent!', {
+
+              // Empty text box initialized with instant focus cursor
+              const text = new fabric.IText(' ', {
                 left: pointer.x,
                 top: pointer.y,
                 fontSize: 22,
@@ -392,6 +392,31 @@
               text.selectAll();
               fCanvas.renderAll();
               setGradingTool('draw');
+            }
+          });
+        } else if (tool === 'check' || tool === 'x') {
+          fCanvas.isDrawingMode = false;
+          fCanvas.selection = false;
+          fCanvas.forEachObject(obj => obj.selectable = false);
+
+          // Click to stamp Checkmark or Red X
+          fCanvas.on('mouse:down', (options) => {
+            if ((currentGradingTool === 'check' || currentGradingTool === 'x') && !options.target) {
+              const pointer = fCanvas.getPointer(options.e);
+              const stampSymbol = currentGradingTool === 'check' ? '✔' : '✖';
+              const stampColor = currentGradingTool === 'check' ? '#16a34a' : '#dc2626';
+
+              const stamp = new fabric.Text(stampSymbol, {
+                left: pointer.x - 10,
+                top: pointer.y - 15,
+                fontSize: 32,
+                fill: stampColor,
+                fontWeight: 'bold',
+                selectable: true
+              });
+
+              fCanvas.add(stamp);
+              fCanvas.renderAll();
             }
           });
         } else if (tool === 'select') {
