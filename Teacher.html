@@ -7,7 +7,6 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -304,34 +303,54 @@
       if (doc.file_url) {
         enablePdfGradingCanvas();
       } else {
-        // Convert Text/Test paper into a markup canvas
+        // Convert Text/Test paper into a reliable SVG-backed canvas
+        const htmlContent = textViewer.innerHTML;
+        const width = 800;
+        const height = Math.max(textViewer.offsetHeight, 1000);
+
         textViewer.style.display = 'none';
         pdfViewer.style.display = 'flex';
+        pdfViewer.innerHTML = '';
+        fabricCanvases = [];
 
-        html2canvas(textViewer).then(async (canvas) => {
-          pdfViewer.innerHTML = '';
-          fabricCanvases = [];
+        const wrapper = document.createElement('div');
+        wrapper.className = 'canvas-wrapper';
+        wrapper.style.width = width + 'px';
+        wrapper.style.height = height + 'px';
 
-          const wrapper = document.createElement('div');
-          wrapper.className = 'canvas-wrapper';
-          wrapper.style.width = canvas.width + 'px';
-          wrapper.style.height = canvas.height + 'px';
+        const bgCanvas = document.createElement('canvas');
+        bgCanvas.width = width;
+        bgCanvas.height = height;
+        const ctx = bgCanvas.getContext('2d');
 
-          const bgCanvas = document.createElement('canvas');
-          bgCanvas.width = canvas.width;
-          bgCanvas.height = canvas.height;
-          const ctx = bgCanvas.getContext('2d');
-          ctx.drawImage(canvas, 0, 0);
-          wrapper.appendChild(bgCanvas);
+        // Draw white background
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, width, height);
+
+        // Convert HTML text to SVG image layer
+        const svgData = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
+          <foreignObject width="100%" height="100%">
+            <div xmlns="http://www.w3.org/1999/xhtml" style="font-family: sans-serif; font-size: 18px; line-height: 1.6; padding: 30px; color: #111; background: #fff;">
+              ${htmlContent}
+            </div>
+          </foreignObject>
+        </svg>`;
+
+        const img = new Image();
+        img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgData);
+
+        img.onload = () => {
+          ctx.drawImage(img, 0, 0);
 
           const overlayCanvas = document.createElement('canvas');
           overlayCanvas.id = 'text-doc-grading-canvas';
+          wrapper.appendChild(bgCanvas);
           wrapper.appendChild(overlayCanvas);
           pdfViewer.appendChild(wrapper);
 
           const fCanvas = new fabric.Canvas('text-doc-grading-canvas', {
-            width: canvas.width,
-            height: canvas.height,
+            width: width,
+            height: height,
             isDrawingMode: true
           });
 
@@ -348,7 +367,7 @@
 
           fabricCanvases = [fCanvas];
           setGradingTool('draw');
-        });
+        };
       }
     }
 
