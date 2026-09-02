@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Teacher Retrieval & Gradebook</title>
 
-  <!-- PDF.js & Fabric.js Libraries for Rendering Student PDF Annotations -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
 
@@ -14,19 +13,28 @@
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f6f8; height: 100vh; display: flex; flex-direction: column; }
     
     header {
-      background: #1e293b; color: white; padding: 1rem 1.5rem; display: flex;
+      background: #1e293b; color: white; padding: 0.75rem 1.5rem; display: flex;
       justify-content: space-between; align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
-    .header-controls { display: flex; gap: 1rem; align-items: center; }
+    .header-controls { display: flex; gap: 0.75rem; align-items: center; }
     select { padding: 0.5rem; border-radius: 4px; border: 1px solid #cbd5e1; outline: none; }
     button { padding: 0.5rem 1rem; border-radius: 4px; border: none; font-weight: bold; cursor: pointer; background: #0070f3; color: white; }
     button:hover { background: #0059b3; }
+    button.success { background: #16a34a; }
+    button.success:hover { background: #15803d; }
     button.danger { background: #d93025; }
     button.danger:hover { background: #b71c1c; }
+    button.active { background: #e0e0e0; color: #111; font-weight: bold; }
+
+    /* Teacher Grading Toolbar */
+    #grading-toolbar {
+      display: none; background: #fee2e2; border-bottom: 2px solid #ef4444;
+      padding: 0.5rem 1.5rem; align-items: center; gap: 1rem; font-size: 0.9rem; color: #991b1b;
+    }
 
     .main-layout { display: flex; flex-grow: 1; overflow: hidden; }
 
-    /* Left Sidebar - Document List */
+    /* Sidebar */
     .sidebar {
       width: 340px; background: #fff; border-right: 1px solid #e2e8f0;
       display: flex; flex-direction: column; padding: 1rem; gap: 1rem;
@@ -44,13 +52,14 @@
     #doc-list li.active { background: #eff6ff; border-color: #3b82f6; font-weight: bold; }
     .doc-meta { font-size: 0.75rem; color: #64748b; margin-top: 0.2rem; }
 
-    /* Right Preview Canvas */
+    /* Preview Workspace */
     .preview-pane { flex-grow: 1; padding: 2rem; overflow-y: auto; background: #f8fafc; display: flex; flex-direction: column; align-items: center; }
     
     #text-viewer {
       width: 100%; max-width: 800px; background: white; padding: 3rem;
-      border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: none; line-height: 1.6; font-size: 1.1rem;
+      border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: none; line-height: 1.6; font-size: 1.1rem; outline: none;
     }
+    #text-viewer.grading-active { border: 2px solid #ef4444; }
 
     #pdf-viewer { display: none; flex-direction: column; align-items: center; gap: 1.5rem; width: 100%; }
     .canvas-wrapper { position: relative; box-shadow: 0 4px 12px rgba(0,0,0,0.1); background: white; }
@@ -58,29 +67,48 @@
 
     .empty-state { text-align: center; color: #94a3b8; margin-top: 5rem; }
 
+    /* Teacher Red Corrections Tag */
+    .teacher-note {
+      background: #fef2f2; border-left: 4px solid #dc2626; padding: 0.75rem;
+      margin-top: 1rem; color: #991b1b; font-size: 0.95rem; font-weight: bold;
+    }
+
     @media print {
-      header, .sidebar { display: none !important; }
+      header, .sidebar, #grading-toolbar { display: none !important; }
       .preview-pane { padding: 0 !important; background: white !important; }
-      #text-viewer, #pdf-viewer { display: block !important; box-shadow: none !important; width: 100% !important; }
+      #text-viewer, #pdf-viewer { display: block !important; box-shadow: none !important; width: 100% !important; border: none !important; }
     }
   </style>
 </head>
 <body>
 
-  <!-- Top Bar -->
   <header>
     <h2>📊 Teacher Retrieval & Gradebook</h2>
     <div class="header-controls">
       <select id="folder-filter" onchange="filterDocuments()">
         <option value="ALL">📁 All Folders</option>
       </select>
-      <button id="delete-btn" class="danger" style="display:none;" onclick="deleteCurrentDocument()">🗑️ Delete Selected</button>
-      <button onclick="window.print()">🖨️ Print Selected Work</button>
+      <button id="grade-btn" class="success" style="display:none;" onclick="startGradingSession()">📝 Grade This Paper</button>
+      <button id="save-grade-btn" class="primary" style="display:none;" onclick="saveGradedPaper()">💾 Save Grade & Markings</button>
+      <button id="delete-btn" class="danger" style="display:none;" onclick="deleteCurrentDocument()">🗑️ Delete</button>
+      <button onclick="window.print()">🖨️ Print</button>
     </div>
   </header>
 
+  <div id="grading-toolbar">
+    <strong>🍎 TEACHER GRADING MODE ACTIVE:</strong>
+    <span id="pdf-grading-tools" style="display:none; gap: 0.5rem; align-items: center;">
+      <button id="tool-draw" class="active" onclick="setGradingTool('draw')">✏️ Red Pen</button>
+      <button id="tool-text" onclick="setGradingTool('text')">🔤 Add Score / Note</button>
+      <button id="tool-select" onclick="setGradingTool('select')">🖐️ Move / Erase</button>
+      <button id="del-obj-btn" class="danger" style="display:none;" onclick="deleteGradingObject()">🗑️ Erase Selected</button>
+    </span>
+    <span id="text-grading-info" style="display:none;">
+      <em>Click anywhere inside the text to type comments/corrections directly in <span style="color:#dc2626; font-weight:bold;">Red Ink</span>.</em>
+    </span>
+  </div>
+
   <div class="main-layout">
-    <!-- Left Document Selector -->
     <div class="sidebar">
       <div class="filter-tabs">
         <button class="tab-btn active" id="tab-all" onclick="setTab('all')">All Work</button>
@@ -89,16 +117,13 @@
       <ul id="doc-list"></ul>
     </div>
 
-    <!-- Right Document Viewer -->
     <div class="preview-pane">
       <div id="empty-state" class="empty-state">
-        <h3>👈 Select a document from the sidebar to review</h3>
+        <h3>👈 Select a document from the sidebar to review or grade</h3>
       </div>
 
-      <!-- Text Document Viewer -->
-      <div id="text-viewer"></div>
+      <div id="text-viewer" contenteditable="false" dir="auto"></div>
 
-      <!-- PDF Annotation Viewer -->
       <div id="pdf-viewer"></div>
     </div>
   </div>
@@ -115,13 +140,23 @@
     let folders = [];
     let currentFilterTab = 'all';
     let selectedDocId = null;
+    let isGradingMode = false;
+
+    let fabricCanvases = [];
+    let currentGradingTool = 'draw';
 
     const folderFilter = document.getElementById('folder-filter');
     const docListEl = document.getElementById('doc-list');
     const textViewer = document.getElementById('text-viewer');
     const pdfViewer = document.getElementById('pdf-viewer');
     const emptyState = document.getElementById('empty-state');
+
+    const gradeBtn = document.getElementById('grade-btn');
+    const saveGradeBtn = document.getElementById('save-grade-btn');
     const deleteBtn = document.getElementById('delete-btn');
+    const gradingToolbar = document.getElementById('grading-toolbar');
+    const pdfGradingTools = document.getElementById('pdf-grading-tools');
+    const textGradingInfo = document.getElementById('text-grading-info');
 
     async function init() {
       await fetchFolders();
@@ -192,6 +227,9 @@
     }
 
     async function viewDocument(id) {
+      if (isGradingMode && !confirm("Exit grading mode without saving?")) return;
+
+      exitGradingModeUI();
       selectedDocId = id;
       renderDocList();
 
@@ -199,21 +237,58 @@
       if (!doc) return;
 
       emptyState.style.display = 'none';
+      gradeBtn.style.display = 'inline-block';
       deleteBtn.style.display = 'inline-block';
 
       if (doc.file_url) {
         textViewer.style.display = 'none';
         pdfViewer.style.display = 'flex';
-        await renderPdfAnnotations(doc.file_url, doc.content);
+        await renderPdfAnnotations(doc.file_url, doc.content, false);
       } else {
         pdfViewer.style.display = 'none';
         textViewer.style.display = 'block';
+        textViewer.contentEditable = "false";
         textViewer.innerHTML = doc.content || '<em>(Empty Document)</em>';
       }
     }
 
-    async function renderPdfAnnotations(pdfUrl, savedAnnotationJson) {
+    // --- GRADING MODE CONTROL ---
+    function startGradingSession() {
+      const doc = documents.find(d => d.id === selectedDocId);
+      if (!doc) return;
+
+      isGradingMode = true;
+      gradeBtn.style.display = 'none';
+      saveGradeBtn.style.display = 'inline-block';
+      gradingToolbar.style.display = 'flex';
+
+      if (doc.file_url) {
+        pdfGradingTools.style.display = 'flex';
+        textGradingInfo.style.display = 'none';
+        enablePdfGradingCanvas();
+      } else {
+        pdfGradingTools.style.display = 'none';
+        textGradingInfo.style.display = 'inline';
+        textViewer.contentEditable = "true";
+        textViewer.classList.add('grading-active');
+        document.execCommand('styleWithCSS', false, true);
+        document.execCommand('foreColor', false, '#dc2626'); // Set red text ink
+      }
+    }
+
+    function exitGradingModeUI() {
+      isGradingMode = false;
+      gradingToolbar.style.display = 'none';
+      saveGradeBtn.style.display = 'none';
+      if (selectedDocId) gradeBtn.style.display = 'inline-block';
+      textViewer.contentEditable = "false";
+      textViewer.classList.remove('grading-active');
+    }
+
+    // --- PDF GRADNG CANVAS (Fabric.js Overlay) ---
+    async function renderPdfAnnotations(pdfUrl, savedAnnotationJson, interactive) {
       pdfViewer.innerHTML = '';
+      fabricCanvases = [];
 
       try {
         const pdf = await pdfjsLib.getDocument(pdfUrl).promise;
@@ -244,48 +319,153 @@
           const fCanvas = new fabric.Canvas(overlayCanvas.id, {
             width: viewport.width,
             height: viewport.height,
-            isDrawingMode: false,
-            selection: false
+            isDrawingMode: interactive,
+            selection: interactive
           });
+
+          fCanvas.freeDrawingBrush.color = '#dc2626'; // Bright Red Teacher Ink
+          fCanvas.freeDrawingBrush.width = 3;
 
           if (annotations[pageNum - 1]) {
             fCanvas.loadFromJSON(annotations[pageNum - 1], () => {
-              fCanvas.forEachObject(obj => obj.selectable = false);
+              if (!interactive) fCanvas.forEachObject(obj => obj.selectable = false);
               fCanvas.renderAll();
             });
           }
+
+          fabricCanvases.push(fCanvas);
         }
       } catch (err) {
-        pdfViewer.innerHTML = '<p style="color:#d93025;">Error rendering student PDF file.</p>';
+        pdfViewer.innerHTML = '<p style="color:#d93025;">Error loading PDF file.</p>';
+      }
+    }
+
+    function enablePdfGradingCanvas() {
+      fabricCanvases.forEach(fCanvas => {
+        fCanvas.isDrawingMode = true;
+        fCanvas.selection = false;
+        setGradingTool('draw');
+      });
+    }
+
+    function setGradingTool(tool) {
+      currentGradingTool = tool;
+
+      document.getElementById('tool-draw').classList.toggle('active', tool === 'draw');
+      document.getElementById('tool-text').classList.toggle('active', tool === 'text');
+      document.getElementById('tool-select').classList.toggle('active', tool === 'select');
+
+      const delBtn = document.getElementById('del-obj-btn');
+      if (tool !== 'select') delBtn.style.display = 'none';
+
+      fabricCanvases.forEach(fCanvas => {
+        fCanvas.off('mouse:down');
+        fCanvas.off('selection:created');
+        fCanvas.off('selection:cleared');
+
+        if (tool === 'draw') {
+          fCanvas.isDrawingMode = true;
+          fCanvas.selection = false;
+          fCanvas.forEachObject(obj => obj.selectable = false);
+        } else if (tool === 'text') {
+          fCanvas.isDrawingMode = false;
+          fCanvas.selection = false;
+          fCanvas.forEachObject(obj => obj.selectable = false);
+
+          fCanvas.on('mouse:down', (options) => {
+            if (currentGradingTool === 'text' && !options.target) {
+              const pointer = fCanvas.getPointer(options.e);
+              const text = new fabric.IText('10/10 Excellent!', {
+                left: pointer.x,
+                top: pointer.y,
+                fontSize: 22,
+                fill: '#dc2626',
+                fontWeight: 'bold',
+                backgroundColor: 'rgba(255,255,255,0.9)',
+                padding: 4,
+                selectable: true
+              });
+
+              fCanvas.add(text);
+              fCanvas.setActiveObject(text);
+              text.enterEditing();
+              text.selectAll();
+              fCanvas.renderAll();
+              setGradingTool('draw');
+            }
+          });
+        } else if (tool === 'select') {
+          fCanvas.isDrawingMode = false;
+          fCanvas.selection = true;
+          fCanvas.forEachObject(obj => obj.selectable = true);
+
+          fCanvas.on('selection:created', () => delBtn.style.display = 'inline-block');
+          fCanvas.on('selection:updated', () => delBtn.style.display = 'inline-block');
+          fCanvas.on('selection:cleared', () => delBtn.style.display = 'none');
+        }
+      });
+    }
+
+    function deleteGradingObject() {
+      fabricCanvases.forEach(fCanvas => {
+        const activeObj = fCanvas.getActiveObject();
+        if (activeObj) {
+          fCanvas.remove(activeObj);
+          fCanvas.discardActiveObject();
+          fCanvas.renderAll();
+        }
+      });
+      document.getElementById('del-obj-btn').style.display = 'none';
+    }
+
+    // --- SAVE GRADED WORK BACK TO SUPABASE ---
+    async function saveGradedPaper() {
+      if (!selectedDocId) return;
+
+      const doc = documents.find(d => d.id === selectedDocId);
+      if (!doc) return;
+
+      let gradedContent = '';
+
+      if (doc.file_url) {
+        gradedContent = JSON.stringify(fabricCanvases.map(c => c.toJSON()));
+      } else {
+        gradedContent = textViewer.innerHTML;
+      }
+
+      const { error } = await dbClient
+        .from('documents')
+        .update({ content: gradedContent, updated_at: new Date() })
+        .eq('id', selectedDocId);
+
+      if (!error) {
+        doc.content = gradedContent;
+        alert("✅ Graded paper saved successfully!");
+        exitGradingModeUI();
+        viewDocument(selectedDocId);
+      } else {
+        alert("Error saving graded paper.");
       }
     }
 
     async function deleteCurrentDocument() {
       if (!selectedDocId) return;
-
       const doc = documents.find(d => d.id === selectedDocId);
-      const docTitle = doc ? doc.title : 'this document';
 
-      if (!confirm(`Are you sure you want to permanently delete "${docTitle}"?`)) {
-        return;
-      }
+      if (!confirm(`Permanently delete "${doc ? doc.title : 'this document'}"?`)) return;
 
       const { error } = await dbClient.from('documents').delete().eq('id', selectedDocId);
 
       if (!error) {
         documents = documents.filter(d => d.id !== selectedDocId);
         selectedDocId = null;
-        
-        // Reset preview panel
         textViewer.style.display = 'none';
         pdfViewer.style.display = 'none';
         emptyState.style.display = 'block';
+        gradeBtn.style.display = 'none';
         deleteBtn.style.display = 'none';
-
+        exitGradingModeUI();
         renderDocList();
-        alert('Document deleted successfully.');
-      } else {
-        alert('Failed to delete document from database.');
       }
     }
 
