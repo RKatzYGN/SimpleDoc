@@ -7,12 +7,13 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f6f8; height: 100vh; display: flex; flex-direction: column; }
     
-    /* Password Login Modal Overlay */
+    /* Password Login Overlay */
     #login-overlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
       background: #0f172a; display: flex; justify-content: center; align-items: center; z-index: 1000;
@@ -27,12 +28,10 @@
       width: 100%; padding: 0.75rem; font-size: 1rem; border: 1px solid #cbd5e1;
       border-radius: 4px; margin-bottom: 1rem; outline: none; text-align: center;
     }
-    .login-box input[type="password"]:focus { border-color: #0070f3; }
     .login-box button {
       width: 100%; padding: 0.75rem; background: #0070f3; color: white;
       border: none; border-radius: 4px; font-weight: bold; font-size: 1rem; cursor: pointer;
     }
-    .login-box button:hover { background: #0059b3; }
     #login-error { color: #dc2626; font-size: 0.85rem; margin-top: 0.75rem; display: none; font-weight: bold; }
 
     /* Teacher Portal Main UI */
@@ -85,7 +84,6 @@
       width: 100%; max-width: 800px; background: white; padding: 3rem;
       border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: none; line-height: 1.6; font-size: 1.1rem; outline: none;
     }
-    #text-viewer.grading-active { border: 2px solid #ef4444; }
 
     #pdf-viewer { display: none; flex-direction: column; align-items: center; gap: 1.5rem; width: 100%; }
     .canvas-wrapper { position: relative; box-shadow: 0 4px 12px rgba(0,0,0,0.1); background: white; }
@@ -128,16 +126,13 @@
 
     <div id="grading-toolbar">
       <strong>🍎 TEACHER TOOLS:</strong>
-      <span id="pdf-grading-tools" style="display:none; gap: 0.5rem; align-items: center;">
+      <span style="display:flex; gap: 0.5rem; align-items: center;">
         <button id="tool-draw" class="active" onclick="setGradingTool('draw')">✏️ Red Pen</button>
         <button id="tool-text" onclick="setGradingTool('text')">🔤 Add Text Box</button>
         <button id="tool-check" onclick="setGradingTool('check')">✅ Green Check Stamp</button>
         <button id="tool-x" onclick="setGradingTool('x')">❌ Red X Stamp</button>
         <button id="tool-select" onclick="setGradingTool('select')">🖐️ Select / Erase</button>
         <button id="del-obj-btn" class="danger" style="display:none;" onclick="deleteGradingObject()">🗑️ Erase Selected</button>
-      </span>
-      <span id="text-grading-info" style="display:none;">
-        <em>Click anywhere in the text to type comments directly in <span style="color:#dc2626; font-weight:bold;">Red Ink</span>.</em>
       </span>
     </div>
 
@@ -190,20 +185,15 @@
     const saveGradeBtn = document.getElementById('save-grade-btn');
     const deleteBtn = document.getElementById('delete-btn');
     const gradingToolbar = document.getElementById('grading-toolbar');
-    const pdfGradingTools = document.getElementById('pdf-grading-tools');
-    const textGradingInfo = document.getElementById('text-grading-info');
 
-    // --- LOGIN AUTHENTICATION ---
     function checkPassword() {
       const input = document.getElementById('password-input').value;
-      const errorMsg = document.getElementById('login-error');
-
       if (input === TEACHER_PASSWORD) {
         document.getElementById('login-overlay').style.display = 'none';
         document.getElementById('app-content').style.display = 'flex';
         initGradebook();
       } else {
-        errorMsg.style.display = 'block';
+        document.getElementById('login-error').style.display = 'block';
       }
     }
 
@@ -301,8 +291,8 @@
       }
     }
 
-    // --- GRADING MODE CONTROL ---
-    function startGradingSession() {
+    // --- UNIVERSAL CANVAS GRADING ACTIVATION ---
+    async function startGradingSession() {
       const doc = documents.find(d => d.id === selectedDocId);
       if (!doc) return;
 
@@ -312,16 +302,53 @@
       gradingToolbar.style.display = 'flex';
 
       if (doc.file_url) {
-        pdfGradingTools.style.display = 'flex';
-        textGradingInfo.style.display = 'none';
         enablePdfGradingCanvas();
       } else {
-        pdfGradingTools.style.display = 'none';
-        textGradingInfo.style.display = 'inline';
-        textViewer.contentEditable = "true";
-        textViewer.classList.add('grading-active');
-        document.execCommand('styleWithCSS', false, true);
-        document.execCommand('foreColor', false, '#dc2626');
+        // Convert Text/Test paper into a markup canvas
+        textViewer.style.display = 'none';
+        pdfViewer.style.display = 'flex';
+
+        html2canvas(textViewer).then(async (canvas) => {
+          pdfViewer.innerHTML = '';
+          fabricCanvases = [];
+
+          const wrapper = document.createElement('div');
+          wrapper.className = 'canvas-wrapper';
+          wrapper.style.width = canvas.width + 'px';
+          wrapper.style.height = canvas.height + 'px';
+
+          const bgCanvas = document.createElement('canvas');
+          bgCanvas.width = canvas.width;
+          bgCanvas.height = canvas.height;
+          const ctx = bgCanvas.getContext('2d');
+          ctx.drawImage(canvas, 0, 0);
+          wrapper.appendChild(bgCanvas);
+
+          const overlayCanvas = document.createElement('canvas');
+          overlayCanvas.id = 'text-doc-grading-canvas';
+          wrapper.appendChild(overlayCanvas);
+          pdfViewer.appendChild(wrapper);
+
+          const fCanvas = new fabric.Canvas('text-doc-grading-canvas', {
+            width: canvas.width,
+            height: canvas.height,
+            isDrawingMode: true
+          });
+
+          fCanvas.freeDrawingBrush.color = '#dc2626';
+          fCanvas.freeDrawingBrush.width = 3;
+
+          // Load previously saved teacher markups if present
+          if (doc.teacher_annotations) {
+            try {
+              const parsed = JSON.parse(doc.teacher_annotations);
+              fCanvas.loadFromJSON(parsed[0], () => fCanvas.renderAll());
+            } catch(e) {}
+          }
+
+          fabricCanvases = [fCanvas];
+          setGradingTool('draw');
+        });
       }
     }
 
@@ -330,11 +357,9 @@
       gradingToolbar.style.display = 'none';
       saveGradeBtn.style.display = 'none';
       if (selectedDocId) gradeBtn.style.display = 'inline-block';
-      textViewer.contentEditable = "false";
-      textViewer.classList.remove('grading-active');
     }
 
-    // --- PDF GRADNG CANVAS ---
+    // --- PDF / CANVAS ANNOTATION ENGINE ---
     async function renderPdfAnnotations(pdfUrl, savedAnnotationJson, interactive) {
       pdfViewer.innerHTML = '';
       fabricCanvases = [];
@@ -501,21 +526,24 @@
       const doc = documents.find(d => d.id === selectedDocId);
       if (!doc) return;
 
-      let gradedContent = '';
+      const markupData = JSON.stringify(fabricCanvases.map(c => c.toJSON()));
+      let updatePayload = {};
 
       if (doc.file_url) {
-        gradedContent = JSON.stringify(fabricCanvases.map(c => c.toJSON()));
+        updatePayload = { content: markupData, updated_at: new Date() };
       } else {
-        gradedContent = textViewer.innerHTML;
+        updatePayload = { teacher_annotations: markupData, updated_at: new Date() };
       }
 
       const { error } = await dbClient
         .from('documents')
-        .update({ content: gradedContent, updated_at: new Date() })
+        .update(updatePayload)
         .eq('id', selectedDocId);
 
       if (!error) {
-        doc.content = gradedContent;
+        if (doc.file_url) doc.content = markupData;
+        else doc.teacher_annotations = markupData;
+
         alert("✅ Graded paper saved successfully!");
         exitGradingModeUI();
         viewDocument(selectedDocId);
