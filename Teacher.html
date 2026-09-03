@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Teacher Retrieval & Gradebook</title>
 
+  <!-- PDF.js & Fabric.js Libraries -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
 
@@ -31,9 +32,10 @@
       width: 100%; padding: 0.75rem; background: #0070f3; color: white;
       border: none; border-radius: 4px; font-weight: bold; font-size: 1rem; cursor: pointer;
     }
+    .login-box button:hover { background: #0059b3; }
     #login-error { color: #dc2626; font-size: 0.85rem; margin-top: 0.75rem; display: none; font-weight: bold; }
 
-    /* Teacher Portal Main UI */
+    /* Main Workspace */
     #app-content { display: none; height: 100vh; flex-direction: column; }
 
     header {
@@ -79,7 +81,6 @@
     /* Preview Workspace */
     .preview-pane { flex-grow: 1; padding: 2rem; overflow-y: auto; background: #f8fafc; display: flex; flex-direction: column; align-items: center; }
     
-    /* Text Document Wrapper with Transparent Drawing Overlay */
     .text-document-container {
       position: relative; width: 100%; max-width: 800px; background: white;
       border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); display: none;
@@ -111,6 +112,7 @@
 </head>
 <body>
 
+  <!-- Password Login Overlay -->
   <div id="login-overlay">
     <div class="login-box">
       <h2>🔒 Teacher Portal</h2>
@@ -121,6 +123,7 @@
     </div>
   </div>
 
+  <!-- Main Workspace -->
   <div id="app-content">
     <header>
       <h2>📊 Teacher Retrieval & Gradebook</h2>
@@ -135,6 +138,7 @@
       </div>
     </header>
 
+    <!-- Teacher Universal Grading Toolbar -->
     <div id="grading-toolbar">
       <strong>🍎 TEACHER TOOLS:</strong>
       <span style="display:flex; gap: 0.5rem; align-items: center;">
@@ -161,11 +165,13 @@
           <h3>👈 Select a document from the sidebar to review or grade</h3>
         </div>
 
+        <!-- Text / Test Document View Container -->
         <div id="text-doc-container" class="text-document-container">
           <div id="text-viewer" dir="auto"></div>
           <canvas id="text-overlay-canvas"></canvas>
         </div>
 
+        <!-- PDF Document Container -->
         <div id="pdf-viewer"></div>
       </div>
     </div>
@@ -465,6 +471,7 @@
             if (currentGradingTool === 'text' && !options.target) {
               const pointer = fCanvas.getPointer(options.e);
 
+              // Clean text box without pre-written text
               const text = new fabric.IText(' ', {
                 left: pointer.x,
                 top: pointer.y,
