@@ -159,7 +159,7 @@
     <ul id="doc-list"></ul>
   </div>
 
-  <!-- Welcome Screen (Default Landing) -->
+  <!-- Welcome Screen -->
   <div id="welcome-screen">
     <h1>Welcome to SimpleDoc</h1>
     <p>Select an assignment from your folders or start a blank document to begin writing.</p>
@@ -205,6 +205,22 @@
     const statusEl = document.getElementById('status');
     const docListEl = document.getElementById('doc-list');
     const folderListEl = document.getElementById('folder-list');
+
+    // --- CLIPBOARD & PASTE PREVENTION IN TEST MODE ---
+    document.addEventListener('paste', (e) => {
+      if (isTestMode) {
+        e.preventDefault();
+        alert('⚠️ Paste function is disabled during Test Mode.');
+      }
+    });
+
+    document.addEventListener('copy', (e) => {
+      if (isTestMode) e.preventDefault();
+    });
+
+    document.addEventListener('cut', (e) => {
+      if (isTestMode) e.preventDefault();
+    });
 
     function toggleDrawer() {
       document.getElementById('drawer').classList.toggle('open');
@@ -377,7 +393,7 @@
       }
     }
 
-    // --- TOUCH & PDF ANNOTATION ENGINE ---
+    // --- PDF ANNOTATION ENGINE ---
     async function renderPdfViewer(pdfUrl, savedAnnotationJson) {
       pdfContainer.innerHTML = '';
       fabricCanvases = [];
@@ -427,17 +443,17 @@
           fCanvas.on('object:added', triggerSave);
           fCanvas.on('object:modified', triggerSave);
 
-          // DOUBLE-TAP / DOUBLE-CLICK TOUCH HANDLER FOR TEXTBOXES
+          // DOUBLE-TAP / DOUBLE-CLICK TOUCH HANDLER FOR BLANK TEXTBOXES
           let lastTapTime = 0;
           fCanvas.on('mouse:down', (options) => {
             const currentTime = new Date().getTime();
             const tapLength = currentTime - lastTapTime;
 
             if (tapLength < 300 && tapLength > 0) {
-              // DOUBLE TAP DETECTED
               const pointer = fCanvas.getPointer(options.e);
 
-              const text = new fabric.IText('Type here...', {
+              // Blank text box with cursor active immediately
+              const text = new fabric.IText(' ', {
                 left: pointer.x - 20,
                 top: pointer.y - 10,
                 fontSize: 20,
@@ -447,18 +463,10 @@
                 selectable: true
               });
 
-              let isFirstEdit = true;
-              text.on('editing:entered', () => {
-                if (isFirstEdit && text.text === 'Type here...') {
-                  text.text = '';
-                  isFirstEdit = false;
-                  fCanvas.renderAll();
-                }
-              });
-
               fCanvas.add(text);
               fCanvas.setActiveObject(text);
               text.enterEditing();
+              text.selectAll();
               fCanvas.renderAll();
               triggerSave();
             }
