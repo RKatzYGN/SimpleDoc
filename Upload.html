@@ -11,13 +11,18 @@
     h2 { margin-bottom: 0.5rem; }
     p { font-size: 0.9rem; color: #666; margin-bottom: 1.5rem; }
     label { font-size: 0.85rem; font-weight: bold; display: block; margin-bottom: 0.4rem; }
-    input[type="text"], select, textarea { width: 100%; padding: 0.75rem; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 1.25rem; }
-    .checkbox-group { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.25rem; background: #fff3f0; padding: 0.75rem; border-radius: 4px; border: 1px solid #ffcdd2; }
-    .checkbox-group label { margin: 0; cursor: pointer; color: #d93025; }
+    input[type="text"], input[type="datetime-local"], select, textarea { width: 100%; padding: 0.75rem; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 1.25rem; font-family: inherit; }
+    .checkbox-group { display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1.25rem; background: #fff3f0; padding: 0.85rem; border-radius: 4px; border: 1px solid #ffcdd2; }
+    .checkbox-row { display: flex; align-items: center; gap: 0.5rem; }
+    .checkbox-row label { margin: 0; cursor: pointer; color: #d93025; }
+    #schedule-container { display: none; border-top: 1px solid #ffcdd2; padding-top: 0.75rem; }
+    #schedule-container input { margin-bottom: 0.25rem; background: #fff; }
+    .helper-text { font-size: 0.75rem; color: #666; display: block; }
     .divider { text-align: center; font-size: 0.8rem; color: #888; margin: 1rem 0; position: relative; }
     .divider::before, .divider::after { content: ""; position: absolute; top: 50%; width: 40%; height: 1px; background: #eee; }
     .divider::before { left: 0; } .divider::after { right: 0; }
     button { width: 100%; padding: 0.85rem; background: #0070f3; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; }
+    button:hover { background: #0059b3; }
     #status-msg { margin-top: 1rem; text-align: center; font-weight: bold; font-size: 0.9rem; }
   </style>
 </head>
@@ -32,10 +37,18 @@
       <option value="">📁 General (No Folder)</option>
     </select>
 
-    <!-- Test Assignment Toggle -->
+    <!-- Test Assignment Toggle & Schedule -->
     <div class="checkbox-group">
-      <input type="checkbox" id="is-test-checkbox" onchange="toggleTestFolder(this)">
-      <label for="is-test-checkbox">🧪 Mark as Test Assignment (Enforces Test Mode)</label>
+      <div class="checkbox-row">
+        <input type="checkbox" id="is-test-checkbox" onchange="toggleTestOptions(this)">
+        <label for="is-test-checkbox">🧪 Mark as Test Assignment (Enforces Test Mode)</label>
+      </div>
+      
+      <div id="schedule-container">
+        <label for="release-time" style="color:#333;">⏰ Unlock Test At (Optional):</label>
+        <input type="datetime-local" id="release-time">
+        <span class="helper-text">Leave blank to allow the student to open the test immediately.</span>
+      </div>
     </div>
 
     <label for="doc-title">Assignment Title</label>
@@ -63,6 +76,7 @@
 
     const folderSelect = document.getElementById('folder-select');
     const statusMsg = document.getElementById('status-msg');
+    const scheduleContainer = document.getElementById('schedule-container');
     let testFolderId = null;
 
     async function loadFolders() {
@@ -77,7 +91,6 @@
         });
       }
 
-      // Automatically create a "Tests" folder if one doesn't exist yet
       if (!testFolderId) {
         const { data: newFolder } = await dbClient.from('folders').insert([{ name: 'Tests' }]).select().single();
         if (newFolder) {
@@ -90,9 +103,13 @@
       }
     }
 
-    function toggleTestFolder(checkbox) {
-      if (checkbox.checked && testFolderId) {
-        folderSelect.value = testFolderId;
+    function toggleTestOptions(checkbox) {
+      if (checkbox.checked) {
+        scheduleContainer.style.display = 'block';
+        if (testFolderId) folderSelect.value = testFolderId;
+      } else {
+        scheduleContainer.style.display = 'none';
+        document.getElementById('release-time').value = '';
       }
     }
 
@@ -101,12 +118,19 @@
       const pdfFile = document.getElementById('pdf-file').files[0];
       const rawText = document.getElementById('doc-content').value.trim();
       const isTest = document.getElementById('is-test-checkbox').checked;
+      const releaseTimeInput = document.getElementById('release-time').value;
       let folderId = folderSelect.value || null;
 
       if (isTest && testFolderId) folderId = testFolderId;
 
       if (!title) return alert("Please enter an assignment title.");
       if (!pdfFile && !rawText) return alert("Select a PDF file OR enter text/link.");
+
+      // Convert local datetime input into an ISO string with timezone offset for Supabase
+      let availableAtISO = null;
+      if (isTest && releaseTimeInput) {
+        availableAtISO = new Date(releaseTimeInput).toISOString();
+      }
 
       statusMsg.style.color = '#0070f3';
       statusMsg.innerText = 'Uploading...';
@@ -144,16 +168,19 @@
         file_url: pdfUrl,
         folder_id: folderId,
         is_test: isTest,
-        is_locked: false
+        is_locked: false,
+        available_at: availableAtISO
       }]);
 
       if (!error) {
         statusMsg.style.color = '#2e7d32';
-        statusMsg.innerText = isTest ? '✅ Test assignment sent to Tests folder!' : '✅ Assignment sent successfully!';
+        statusMsg.innerText = isTest ? '✅ Test assignment scheduled & sent!' : '✅ Assignment sent successfully!';
         document.getElementById('doc-title').value = '';
         document.getElementById('pdf-file').value = '';
         document.getElementById('doc-content').value = '';
+        document.getElementById('release-time').value = '';
         document.getElementById('is-test-checkbox').checked = false;
+        scheduleContainer.style.display = 'none';
       } else {
         statusMsg.style.color = '#d93025';
         statusMsg.innerText = 'Database upload error.';
