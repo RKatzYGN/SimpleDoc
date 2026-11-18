@@ -1,4 +1,3 @@
-<!DOCTYPE html>
 <html lang="he" dir="auto">
 <head>
   <meta charset="UTF-8">
@@ -62,7 +61,8 @@
     }
     #doc-list li:hover { background: #f0f0f0; }
     #doc-list li.active { background: #e0e0e0; font-weight: bold; }
-    #doc-list li.locked { opacity: 0.6; cursor: not-allowed; background: #f5f5f5; }
+    #doc-list li.locked { opacity: 0.65; cursor: not-allowed; background: #f5f5f5; }
+    .schedule-subtext { display: block; font-size: 0.72rem; color: #d93025; margin-top: 2px; font-weight: normal; }
     .del-btn { border: none; background: transparent; color: #c00; font-size: 0.8rem; padding: 0 0.4rem; }
 
     /* Welcome Screen Container */
@@ -222,8 +222,14 @@
       if (isTestMode) e.preventDefault();
     });
 
-    function toggleDrawer() {
-      document.getElementById('drawer').classList.toggle('open');
+    async function toggleDrawer() {
+      const drawer = document.getElementById('drawer');
+      const isOpening = !drawer.classList.contains('open');
+      drawer.classList.toggle('open');
+      // Refresh documents when opening drawer to ensure time locks are up-to-date
+      if (isOpening) {
+        await fetchDocuments();
+      }
     }
 
     async function initApp() {
@@ -291,11 +297,26 @@
       statusEl.innerText = 'Ready';
     }
 
+    function isScheduledFuture(doc) {
+      if (!doc.available_at) return false;
+      return new Date() < new Date(doc.available_at);
+    }
+
     async function selectDocument(id) {
       if (isTestMode) return;
 
       const doc = documents.find(d => d.id === id);
       if (!doc) return;
+
+      // Check if test is scheduled for a future time
+      if (isScheduledFuture(doc)) {
+        const unlockDate = new Date(doc.available_at);
+        const formattedDate = unlockDate.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+        const formattedTime = unlockDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        alert(`⏳ This test is currently locked.\n\nIt will become available on ${formattedDate} at ${formattedTime}.`);
+        renderDocList(); // Re-render in case time just passed
+        return;
+      }
 
       if (doc.is_locked) {
         alert('This test has been submitted and is locked.');
@@ -313,6 +334,7 @@
       titleInput.value = doc.title || 'Untitled Document';
 
       welcomeScreen.style.display = 'none';
+      document.getElementById('drawer').classList.remove('open');
 
       if (doc.file_url) {
         editor.style.display = 'none';
@@ -335,25 +357,37 @@
       const filtered = selectedFolderId ? documents.filter(d => d.folder_id === selectedFolderId) : documents;
 
       filtered.forEach(doc => {
+        const isFuture = isScheduledFuture(doc);
         const li = document.createElement('li');
         if (doc.id === currentDocId) li.classList.add('active');
-        if (doc.is_locked) li.classList.add('locked');
+        if (doc.is_locked || isFuture) li.classList.add('locked');
         
-        const span = document.createElement('span');
-        
+        const infoDiv = document.createElement('div');
+        infoDiv.style.flexGrow = '1';
+
         let icon = '📝 ';
         if (doc.file_url) icon = '📑 ';
         else if (doc.content && doc.content.includes('<p>')) icon = '📄 ';
 
         if (doc.is_locked) icon = '🔒 ';
+        else if (isFuture) icon = '⏳ ';
         else if (doc.is_test) icon = '🧪 ';
 
-        span.innerText = icon + (doc.title || 'Untitled');
-        span.onclick = () => { selectDocument(doc.id); toggleDrawer(); };
+        let labelHTML = `<span>${icon}${doc.title || 'Untitled'}</span>`;
+        
+        if (isFuture) {
+          const unlockDate = new Date(doc.available_at);
+          const timeStr = unlockDate.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' at ' + unlockDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          labelHTML += `<span class="schedule-subtext">Unlocks ${timeStr}</span>`;
+        }
 
-        li.appendChild(span);
+        infoDiv.innerHTML = labelHTML;
+        infoDiv.onclick = () => selectDocument(doc.id);
 
-        if (!doc.is_locked) {
+        li.appendChild(infoDiv);
+
+        // Hide delete button on submitted tests or scheduled future tests
+        if (!doc.is_locked && !isFuture) {
           const del = document.createElement('button');
           del.className = 'del-btn';
           del.innerText = '✕';
@@ -452,7 +486,6 @@
             if (tapLength < 300 && tapLength > 0) {
               const pointer = fCanvas.getPointer(options.e);
 
-              // Blank text box with cursor active immediately
               const text = new fabric.IText(' ', {
                 left: pointer.x - 20,
                 top: pointer.y - 10,
